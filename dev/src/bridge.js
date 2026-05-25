@@ -78,32 +78,40 @@ function msUntil(unixTimestamp) {
  * Structure mise à jour lors de la détection (voir probe()).
  */
 const PATHS = {
-  // Collections de villes du joueur
+  // Collections de villes du joueur — toutes les variantes connues de Grepolis
   townList: [
     'MM.models.town_list',
+    'MM.models.towns',
+    'MM.models.player_towns',
     'Game.models.town_list',
+    'Game.town_list',
     'GameModels.town_list',
   ],
   // Données de village fermier (farm villages sur les îles)
   farmVillages: [
     'MM.models.farm_towns',
+    'MM.models.farm_villages',
     'Game.models.farm_towns',
   ],
   // Données du monde (vitesse, système, etc.)
   worldSettings: [
     'Game.world_config',
+    'Game.game_data',
     'MM.models.game_data',
+    'MM.models.world_settings',
     'GameConfig',
   ],
   // Attaques entrantes
   attacks: [
     'MM.models.town_overviews',
     'MM.models.unit_movements',
+    'MM.models.movements',
   ],
   // Relations joueur (alliance, guerres, NAP)
   relations: [
     'MM.models.player_relations',
     'MM.models.alliance_relations',
+    'MM.models.diplomacy',
   ],
 };
 
@@ -216,6 +224,40 @@ function parseBuildings(model) {
     if (level !== undefined) buildings[name] = parseInt(level, 10) || 0;
   }
   return buildings;
+}
+
+/**
+ * Parse un objet ville plain (Game.village_data ou équivalent) en City Hermes.
+ * Utilisé quand les données ne sont pas dans une collection Backbone.
+ * @param {object} data - Plain object
+ * @returns {import('./types').City|null}
+ */
+function parsePlainTownData(data) {
+  if (!data || typeof data !== 'object') return null;
+  try {
+    const id   = data.id   ?? data.town_id  ?? data.village_id;
+    const name = data.name ?? data.town_name ?? `Ville ${id}`;
+    const x    = data.x   ?? data.coord_x   ?? data.island_x;
+    const y    = data.y   ?? data.coord_y   ?? data.island_y;
+    if (id == null) return null;
+    return {
+      id,
+      name,
+      x: x ?? 0,
+      y: y ?? 0,
+      resources: {
+        wood:   parseInt(data.wood   ?? 0, 10),
+        stone:  parseInt(data.stone  ?? 0, 10),
+        silver: parseInt(data.silver ?? data.iron ?? 0, 10),
+      },
+      buildings:      data.buildings      ?? {},
+      queue:          data.building_queue ?? [],
+      population:     { current: data.pop ?? 0, max: data.pop_max ?? 0 },
+      specialization: data.town_type      ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**

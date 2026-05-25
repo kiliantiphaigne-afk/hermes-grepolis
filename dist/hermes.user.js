@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         Hermes — Grepolis Assistant
 // @namespace    https://github.com/hermes-grepolis
-// @version      1.0.0
+// @version      1.0.2
 // @description  Intelligent automation for Grepolis — farming, building, combat, strategy advisor
 // @author       Hermes
 // @match        *://*.grepolis.com/game/*
 // @match        *://*.grepolis.com/game/
 // @match        *://grepolis.com/game/*
+// @include      *://*.grepolis.com/game*
+// @include      *://grepolis.com/game*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
@@ -591,32 +593,40 @@
    * Structure mise à jour lors de la détection (voir probe()).
    */
   const PATHS = {
-    // Collections de villes du joueur
+    // Collections de villes du joueur — toutes les variantes connues de Grepolis
     townList: [
       'MM.models.town_list',
+      'MM.models.towns',
+      'MM.models.player_towns',
       'Game.models.town_list',
+      'Game.town_list',
       'GameModels.town_list',
     ],
     // Données de village fermier (farm villages sur les îles)
     farmVillages: [
       'MM.models.farm_towns',
+      'MM.models.farm_villages',
       'Game.models.farm_towns',
     ],
     // Données du monde (vitesse, système, etc.)
     worldSettings: [
       'Game.world_config',
+      'Game.game_data',
       'MM.models.game_data',
+      'MM.models.world_settings',
       'GameConfig',
     ],
     // Attaques entrantes
     attacks: [
       'MM.models.town_overviews',
       'MM.models.unit_movements',
+      'MM.models.movements',
     ],
     // Relations joueur (alliance, guerres, NAP)
     relations: [
       'MM.models.player_relations',
       'MM.models.alliance_relations',
+      'MM.models.diplomacy',
     ],
   };
 
@@ -7972,6 +7982,30 @@
 
       hermes.log.info('Dashboard: injecté');
       console.log('%c[HERMES] ✅ Panel prêt — Ctrl+Shift+H pour masquer/afficher', 'color:#4ade80;font-weight:bold');
+
+      // Notification système Tampermonkey — visible SANS F12 (confirme que le script tourne).
+      if (typeof GM_notification === 'function') {
+        GM_notification({
+          title:   '⚡ Hermes opérationnel',
+          text:    'Le panneau Hermes est actif en haut à droite de l\'écran.',
+          timeout: 5000,
+        });
+      }
+
+      // Watchdog : Grepolis peut remplacer le DOM après chargement.
+      // On vérifie toutes les 2 secondes et on réinjecte si le panel a disparu.
+      const _watchdogId = setInterval(() => {
+        if (!document.getElementById(PANEL_ID) && _panelEl) {
+          try {
+            hermes.log.warn('Dashboard: panel disparu, réinjection…');
+            (document.documentElement || document.body).appendChild(_panelEl);
+            injectStyles();
+          } catch { /* no-op */ }
+        }
+      }, 2000);
+
+      // Nettoyer le watchdog au destroy
+      _subs.push(() => clearInterval(_watchdogId));
     },
 
     /**
@@ -8070,7 +8104,16 @@
   // ─── Auto-registration ────────────────────────────────────────────────────────
 
   hermes.register('dashboard', {
-    init()    { dashboard.init();    },
+    init() {
+      // Injection immédiate puis réinjection après 3s (Grepolis peut remplacer le DOM).
+      dashboard.init();
+      setTimeout(() => {
+        if (!document.getElementById(PANEL_ID)) {
+          hermes.log.warn('Dashboard: réinjection différée (DOM remplacé par Grepolis)');
+          dashboard.init();
+        }
+      }, 3000);
+    },
     destroy() { dashboard.destroy(); },
   });
 

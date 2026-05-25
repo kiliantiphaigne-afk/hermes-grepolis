@@ -1010,6 +1010,30 @@ export const dashboard = {
 
     hermes.log.info('Dashboard: injecté');
     console.log('%c[HERMES] ✅ Panel prêt — Ctrl+Shift+H pour masquer/afficher', 'color:#4ade80;font-weight:bold');
+
+    // Notification système Tampermonkey — visible SANS F12 (confirme que le script tourne).
+    if (typeof GM_notification === 'function') {
+      GM_notification({
+        title:   '⚡ Hermes opérationnel',
+        text:    'Le panneau Hermes est actif en haut à droite de l\'écran.',
+        timeout: 5000,
+      });
+    }
+
+    // Watchdog : Grepolis peut remplacer le DOM après chargement.
+    // On vérifie toutes les 2 secondes et on réinjecte si le panel a disparu.
+    const _watchdogId = setInterval(() => {
+      if (!document.getElementById(PANEL_ID) && _panelEl) {
+        try {
+          hermes.log.warn('Dashboard: panel disparu, réinjection…');
+          (document.documentElement || document.body).appendChild(_panelEl);
+          injectStyles();
+        } catch { /* no-op */ }
+      }
+    }, 2000);
+
+    // Nettoyer le watchdog au destroy
+    _subs.push(() => clearInterval(_watchdogId));
   },
 
   /**
@@ -1108,7 +1132,16 @@ export const dashboard = {
 // ─── Auto-registration ────────────────────────────────────────────────────────
 
 hermes.register('dashboard', {
-  init()    { dashboard.init();    },
+  init() {
+    // Injection immédiate puis réinjection après 3s (Grepolis peut remplacer le DOM).
+    dashboard.init();
+    setTimeout(() => {
+      if (!document.getElementById(PANEL_ID)) {
+        hermes.log.warn('Dashboard: réinjection différée (DOM remplacé par Grepolis)');
+        dashboard.init();
+      }
+    }, 3000);
+  },
   destroy() { dashboard.destroy(); },
 });
 
