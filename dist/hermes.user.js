@@ -364,19 +364,24 @@
         // Le DOM doit être disponible (document-start peut être appelé trop tôt).
         if (!document.body) return false;
 
+        // En sandbox Tampermonkey (@grant GM_*), window.MM = undefined.
+        // Il faut passer par unsafeWindow pour accéder aux globals de la page réelle.
+        const _w = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+
         // Critère fort : town_list hydraté avec au moins 1 ville.
         try {
-          const tl = window.MM && window.MM.models && window.MM.models.town_list;
+          const tl = _w.MM && _w.MM.models && _w.MM.models.town_list;
           if (tl && tl.models && tl.models.length > 0) return true;
           if (tl && typeof tl.length === 'number' && tl.length > 0) return true;
         } catch { /* continue */ }
 
         // Game.townId défini = on est dans une ville spécifique = jeu opérationnel.
         try {
-          if (window.Game && window.Game.townId && window.Game.townId > 0) return true;
+          if (_w.Game && _w.Game.townId && _w.Game.townId > 0) return true;
         } catch { /* continue */ }
 
         // Fallback UI : barre de ressources ou toolbar = jeu interactif.
+        // Le DOM est le vrai DOM (pas sandboxé) — ces sélecteurs fonctionnent toujours.
         try {
           if (document.querySelector('.resources_bar') !== null) return true;
           if (document.querySelector('#toolbar_activity_feed') !== null) return true;
@@ -648,7 +653,10 @@
    */
   function resolveFirst(paths) {
     for (const path of paths) {
-      const obj = safeGet(window, path);
+      // IMPORTANT : utiliser _uw (unsafeWindow) et non window (sandbox Tampermonkey).
+      // Dans le sandbox, window.MM et window.Game sont undefined —
+      // seul unsafeWindow donne accès aux globals de la vraie page Grepolis.
+      const obj = safeGet(_uw, path);
       if (obj !== undefined && obj !== null) return obj;
     }
     return null;
@@ -1409,12 +1417,26 @@
     getCity(cityId) {
       try {
         const townList = resolveFirst(PATHS.townList);
-        if (!townList) return null;
-        // Backbone.Collection.get() recherche par ID.
-        const model = typeof townList.get === 'function'
-          ? townList.get(cityId)
-          : (townList.models ?? []).find((m) => m.get('id') === cityId || m.id === cityId);
-        return parseTownModel(model);
+        if (townList) {
+          // Backbone.Collection.get() recherche par ID.
+          const model = typeof townList.get === 'function'
+            ? townList.get(cityId)
+            : (townList.models ?? []).find((m) => {
+                // Support Backbone model ET plain object dans la recherche.
+                const id = typeof m.get === 'function' ? m.get('id') : m.id;
+                return id == cityId; // == intentionnel (int vs string)
+              });
+          if (model) {
+            // Essayer Backbone d'abord, fallback plain object.
+            return parseTownModel(model) ?? parsePlainTownData(
+              typeof model.toJSON === 'function' ? model.toJSON() : model
+            );
+          }
+        }
+
+        // Fallback : chercher dans getCities() (multi-sources)
+        const cities = this.getCities();
+        return cities.find((c) => String(c.id) === String(cityId)) ?? null;
       } catch (err) {
         hermes.log.error(`getCity(${cityId}) failed`, err);
         return null;
@@ -1579,8 +1601,8 @@
      */
     getMapData(x, y, radius) {
       try {
-        const mapData = safeGet(window, 'MM.models.map_data')
-          ?? safeGet(window, 'Game.map_data');
+        const mapData = safeGet(_uw, 'MM.models.map_data')
+          ?? safeGet(_uw, 'Game.map_data');
         if (!mapData) return [];
 
         const models = mapData.models ?? Object.values(mapData);
@@ -1704,8 +1726,8 @@
         }
 
         // Méthode 2 : passer par une commande globale Grepolis.
-        const cmd = safeGet(window, 'GameDataHelperFunctions.farmTown')
-          ?? safeGet(window, 'GPWindowMgr.farmAction');
+        const cmd = safeGet(_uw, 'GameDataHelperFunctions.farmTown')
+          ?? safeGet(_uw, 'GPWindowMgr.farmAction');
         if (typeof cmd === 'function') {
           cmd({ town_id: cityId, farm_town_id: villageId, action: type });
           hermes.log.info(`farmVillage: ${type} via GPWindowMgr → village ${villageId}`);
@@ -1732,8 +1754,8 @@
     async buildBuilding(cityId, building, level) {
       try {
         // Méthode 1 : via BuildingPlaceView (vue native).
-        const BuildingPlace = safeGet(window, 'Views.BuildingPlaceView')
-          ?? safeGet(window, 'GPWindowMgr.BuildingPlaceView');
+        const BuildingPlace = safeGet(_uw, 'Views.BuildingPlaceView')
+          ?? safeGet(_uw, 'GPWindowMgr.BuildingPlaceView');
         if (BuildingPlace && typeof BuildingPlace.build === 'function') {
           BuildingPlace.build({ town_id: cityId, building, level });
           hermes.log.info(`buildBuilding: ${building} lvl${level} → ville ${cityId}`);
@@ -1770,8 +1792,8 @@
      */
     async sendTrade(fromCityId, toCityId, resources) {
       try {
-        const TradeView = safeGet(window, 'Views.TradeCenterView')
-          ?? safeGet(window, 'GPWindowMgr.TradeCenterView');
+        const TradeView = safeGet(_uw, 'Views.TradeCenterView')
+          ?? safeGet(_uw, 'GPWindowMgr.TradeCenterView');
         if (TradeView && typeof TradeView.send === 'function') {
           TradeView.send({
             town_id_origin: fromCityId,
@@ -1783,7 +1805,7 @@
         }
 
         // Fallback via commande globale.
-        const tradeCmd = safeGet(window, 'GameDataHelperFunctions.sendTrade');
+        const tradeCmd = safeGet(_uw, 'GameDataHelperFunctions.sendTrade');
         if (typeof tradeCmd === 'function') {
           tradeCmd(fromCityId, toCityId, resources);
           return true;
@@ -1809,8 +1831,8 @@
      */
     async sendSupport(fromCityId, targetX, targetY, units, arrivalTime) {
       try {
-        const SupportView = safeGet(window, 'Views.AttackView')
-          ?? safeGet(window, 'GPWindowMgr.AttackView');
+        const SupportView = safeGet(_uw, 'Views.AttackView')
+          ?? safeGet(_uw, 'GPWindowMgr.AttackView');
         if (SupportView && typeof SupportView.sendSupport === 'function') {
           SupportView.sendSupport({
             town_id: fromCityId,
@@ -1860,38 +1882,46 @@
     probe() {
       console.group('%c[HERMES] Bridge Diagnostic', 'color:#4ade80;font-weight:bold');
 
-      // window.Game
-      if (typeof window.Game !== 'undefined') {
-        console.log('✅ window.Game trouvé. Clés:', Object.keys(window.Game));
-        if (window.Game.village_data) {
-          const towns = Object.values(window.Game.village_data);
+      // window.Game (via unsafeWindow — le vrai Game de Grepolis)
+      if (_uw.Game !== undefined) {
+        console.log('✅ Game trouvé. Clés:', Object.keys(_uw.Game).slice(0, 30).join(', '));
+        if (_uw.Game.village_data) {
+          const towns = Object.values(_uw.Game.village_data);
           console.log(`  ✅ village_data: ${towns.length} villes`, towns[0] ?? '(vide)');
         } else {
           console.warn('  ❌ Game.village_data absent');
         }
-        if (window.Game.player) {
-          console.log('  ✅ Game.player:', Object.keys(window.Game.player ?? {}));
+        if (_uw.Game.player) {
+          console.log('  ✅ Game.player:', Object.keys(_uw.Game.player ?? {}));
         }
+        console.log('  Game.townId:', _uw.Game.townId);
+        console.log('  Game.player_id:', _uw.Game.player_id);
       } else {
-        console.warn('❌ window.Game non trouvé');
+        console.warn('❌ Game non trouvé (unsafeWindow.Game === undefined)');
       }
 
-      // window.MM
-      if (typeof window.MM !== 'undefined') {
-        console.log('✅ window.MM trouvé');
-        if (window.MM.models) {
-          console.log('  MM.models keys:', Object.keys(window.MM.models));
-          const tl = window.MM.models.town_list;
+      // window.MM (via unsafeWindow)
+      if (_uw.MM !== undefined) {
+        console.log('✅ MM trouvé');
+        if (_uw.MM.models) {
+          console.log('  MM.models keys:', Object.keys(_uw.MM.models).join(', '));
+          const tl = _uw.MM.models.town_list;
           if (tl) {
             console.log(`  ✅ MM.models.town_list: ${tl.models?.length ?? 'N/A'} modèles`, tl);
           } else {
             console.warn('  ❌ MM.models.town_list absent');
           }
+          const ft = _uw.MM.models.farm_towns ?? _uw.MM.models.farm_villages;
+          if (ft) {
+            console.log(`  ✅ farm_towns: ${ft.models?.length ?? 'N/A'} modèles`);
+          } else {
+            console.warn('  ❌ farm_towns absent (normal si île pas encore visitée)');
+          }
         } else {
           console.warn('  ❌ MM.models absent');
         }
       } else {
-        console.warn('❌ window.MM non trouvé');
+        console.warn('❌ MM non trouvé (unsafeWindow.MM === undefined)');
       }
 
       // Résultat getCities
@@ -1901,13 +1931,13 @@
       } else {
         console.error('❌ getCities(): aucune ville — structure Grepolis non reconnue');
         // Dump global pour aider au debug
-        console.log('Globals disponibles (filtrés):', Object.keys(window).filter(
+        console.log('Globals disponibles (filtrés):', Object.keys(_uw).filter(
           (k) => /game|village|town|model|backbone|mm|grepolis/i.test(k)
         ));
       }
 
       console.groupEnd();
-      return { game: !!window.Game, mm: !!window.MM, cities };
+      return { game: !!_uw.Game, mm: !!_uw.MM, cities };
     },
 
     // ── Init ──────────────────────────────────────────────────────────────────
@@ -1929,18 +1959,21 @@
       });
 
       // Log console pour diagnostiquer la structure Grepolis.
+      // IMPORTANT : utiliser _uw (unsafeWindow) — window du sandbox Tampermonkey
+      // ne contient pas MM, Game, etc. (globals de la page réelle).
       console.group('[HERMES Bridge] Structure Grepolis');
       try {
-        if (typeof window.Game !== 'undefined') {
-          console.log('window.Game keys:', Object.keys(window.Game).slice(0, 30).join(', '));
-          if (window.Game.townId) console.log('Game.townId:', window.Game.townId);
+        if (_uw.Game !== undefined) {
+          console.log('Game keys:', Object.keys(_uw.Game).slice(0, 30).join(', '));
+          if (_uw.Game.townId) console.log('Game.townId:', _uw.Game.townId);
+          if (_uw.Game.player_id) console.log('Game.player_id:', _uw.Game.player_id);
         } else {
-          console.warn('window.Game: absent');
+          console.warn('Game: absent (unsafeWindow.Game undefined)');
         }
-        if (typeof window.MM !== 'undefined' && window.MM.models) {
-          console.log('MM.models keys:', Object.keys(window.MM.models).join(', '));
+        if (_uw.MM !== undefined && _uw.MM.models) {
+          console.log('MM.models keys:', Object.keys(_uw.MM.models).join(', '));
         } else {
-          console.warn('window.MM: absent');
+          console.warn('MM: absent (unsafeWindow.MM undefined)');
         }
       } catch (e) { console.warn('Bridge diagnostic error', e); }
       console.groupEnd();

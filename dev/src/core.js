@@ -340,19 +340,24 @@ function waitForGameReady(log) {
       // Le DOM doit être disponible (document-start peut être appelé trop tôt).
       if (!document.body) return false;
 
+      // En sandbox Tampermonkey (@grant GM_*), window.MM = undefined.
+      // Il faut passer par unsafeWindow pour accéder aux globals de la page réelle.
+      const _w = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+
       // Critère fort : town_list hydraté avec au moins 1 ville.
       try {
-        const tl = window.MM && window.MM.models && window.MM.models.town_list;
+        const tl = _w.MM && _w.MM.models && _w.MM.models.town_list;
         if (tl && tl.models && tl.models.length > 0) return true;
         if (tl && typeof tl.length === 'number' && tl.length > 0) return true;
       } catch { /* continue */ }
 
       // Game.townId défini = on est dans une ville spécifique = jeu opérationnel.
       try {
-        if (window.Game && window.Game.townId && window.Game.townId > 0) return true;
+        if (_w.Game && _w.Game.townId && _w.Game.townId > 0) return true;
       } catch { /* continue */ }
 
       // Fallback UI : barre de ressources ou toolbar = jeu interactif.
+      // Le DOM est le vrai DOM (pas sandboxé) — ces sélecteurs fonctionnent toujours.
       try {
         if (document.querySelector('.resources_bar') !== null) return true;
         if (document.querySelector('#toolbar_activity_feed') !== null) return true;
