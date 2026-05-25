@@ -401,16 +401,52 @@ const bridge = {
    */
   getCities() {
     try {
+      // Tentative 1 : collection Backbone (MM.models.town_list, etc.)
       const townList = resolveFirst(PATHS.townList);
-      if (!townList) {
-        hermes.log.warn('getCities: town_list non trouvé');
-        return [];
+      if (townList) {
+        const models = townList.models ?? (Array.isArray(townList) ? townList : []);
+        if (models.length > 0) {
+          const cities = models.map(parseTownModel).filter(Boolean);
+          if (cities.length > 0) return cities;
+        }
+        // townList existe mais .models est vide — essayer comme plain object
+        if (!Array.isArray(townList) && typeof townList === 'object' && !townList.models) {
+          const vals = Object.values(townList).filter((v) => v && typeof v === 'object');
+          if (vals.length > 0) {
+            const cities = vals.map(parsePlainTownData).filter(Boolean);
+            if (cities.length > 0) return cities;
+          }
+        }
       }
-      // Backbone.Collection.models ou simple Array.
-      const models = townList.models ?? Object.values(townList);
-      return models
-        .map(parseTownModel)
-        .filter(Boolean);
+
+      // Tentative 2 : window.Game.village_data (plain object — très fiable)
+      const villageData = safeGet(window, 'Game.village_data');
+      if (villageData && typeof villageData === 'object') {
+        const entries = Object.values(villageData);
+        if (entries.length > 0) {
+          const cities = entries.map(parsePlainTownData).filter(Boolean);
+          if (cities.length > 0) {
+            hermes.log.debug(`getCities: ${cities.length} villes via Game.village_data`);
+            return cities;
+          }
+        }
+      }
+
+      // Tentative 3 : window.Game.player (objet joueur avec ses villes)
+      const playerTowns = safeGet(window, 'Game.player.towns')
+        ?? safeGet(window, 'Game.player_data.towns');
+      if (playerTowns && typeof playerTowns === 'object') {
+        const entries = Array.isArray(playerTowns)
+          ? playerTowns
+          : Object.values(playerTowns);
+        if (entries.length > 0) {
+          const cities = entries.map(parsePlainTownData).filter(Boolean);
+          if (cities.length > 0) return cities;
+        }
+      }
+
+      hermes.log.warn('getCities: aucune source trouvée — bridge.probe() pour diagnostiquer');
+      return [];
     } catch (err) {
       hermes.log.error('getCities failed', err);
       return [];
@@ -783,6 +819,66 @@ const bridge = {
     return hermes.on(eventType, handler);
   },
 
+  // ── Diagnostic ────────────────────────────────────────────────────────────
+
+  /**
+   * Diagnostic complet de la structure Grepolis — à appeler depuis la console :
+   *   window.Hermes.bridge.probe()
+   * Affiche tout ce qui est disponible et tente de trouver les villes.
+   */
+  probe() {
+    console.group('%c[HERMES] Bridge Diagnostic', 'color:#4ade80;font-weight:bold');
+
+    // window.Game
+    if (typeof window.Game !== 'undefined') {
+      console.log('✅ window.Game trouvé. Clés:', Object.keys(window.Game));
+      if (window.Game.village_data) {
+        const towns = Object.values(window.Game.village_data);
+        console.log(`  ✅ village_data: ${towns.length} villes`, towns[0] ?? '(vide)');
+      } else {
+        console.warn('  ❌ Game.village_data absent');
+      }
+      if (window.Game.player) {
+        console.log('  ✅ Game.player:', Object.keys(window.Game.player ?? {}));
+      }
+    } else {
+      console.warn('❌ window.Game non trouvé');
+    }
+
+    // window.MM
+    if (typeof window.MM !== 'undefined') {
+      console.log('✅ window.MM trouvé');
+      if (window.MM.models) {
+        console.log('  MM.models keys:', Object.keys(window.MM.models));
+        const tl = window.MM.models.town_list;
+        if (tl) {
+          console.log(`  ✅ MM.models.town_list: ${tl.models?.length ?? 'N/A'} modèles`, tl);
+        } else {
+          console.warn('  ❌ MM.models.town_list absent');
+        }
+      } else {
+        console.warn('  ❌ MM.models absent');
+      }
+    } else {
+      console.warn('❌ window.MM non trouvé');
+    }
+
+    // Résultat getCities
+    const cities = bridge.getCities();
+    if (cities.length > 0) {
+      console.log(`✅ getCities(): ${cities.length} villes trouvées`, cities);
+    } else {
+      console.error('❌ getCities(): aucune ville — structure Grepolis non reconnue');
+      // Dump global pour aider au debug
+      console.log('Globals disponibles (filtrés):', Object.keys(window).filter(
+        (k) => /game|village|town|model|backbone|mm|grepolis/i.test(k)
+      ));
+    }
+
+    console.groupEnd();
+    return { game: !!window.Game, mm: !!window.MM, cities };
+  },
+
   // ── Init ──────────────────────────────────────────────────────────────────
 
   /**
@@ -792,15 +888,21 @@ const bridge = {
   init() {
     hermes.log.info('GameBridge: initialisation…');
 
-    // Exploration des internals disponibles (log pour le debug).
+    // Log direct dans la console pour faciliter le debug.
+    console.group('[HERMES Bridge] Détection structure Grepolis');
     if (typeof window.Game !== 'undefined') {
-      const availableKeys = Object.keys(window.Game).slice(0, 20).join(', ');
-      hermes.log.debug(`window.Game disponible. Clés (20 premières): ${availableKeys}`);
+      console.log('window.Game:', Object.keys(window.Game).slice(0, 25).join(', '));
+      if (window.Game.village_data) {
+        const n = Object.keys(window.Game.village_data).length;
+        console.log(`village_data: ${n} villes`);
+      }
+    } else {
+      console.warn('window.Game: non disponible au moment du bridge.init()');
     }
     if (typeof window.MM !== 'undefined') {
-      const availableModels = Object.keys(window.MM.models ?? {}).join(', ');
-      hermes.log.debug(`window.MM.models: ${availableModels}`);
+      console.log('MM.models:', Object.keys(window.MM?.models ?? {}).join(', '));
     }
+    console.groupEnd();
 
     // Attacher les hooks Backbone.
     attachBackboneHooks();
