@@ -1034,6 +1034,24 @@ export const dashboard = {
 
     // Nettoyer le watchdog au destroy
     _subs.push(() => clearInterval(_watchdogId));
+
+    // Auto-refresh : poll toutes les 5s jusqu'à trouver des villes (max 3 min).
+    // Corrige le problème de timing : Grepolis charge ses données après le boot Hermes.
+    let _cityPollAttempts = 0;
+    const _cityPollId = setInterval(() => {
+      _cityPollAttempts++;
+      let found = 0;
+      try { found = bridge.getCities().length; } catch { /* no-op */ }
+      if (found > 0) {
+        clearInterval(_cityPollId);
+        console.log(`[HERMES] ${found} ville(s) détectée(s) après ${_cityPollAttempts * 5}s`);
+        renderActiveTab();
+      } else if (_cityPollAttempts >= 36) {
+        clearInterval(_cityPollId);
+        console.warn('[HERMES] Timeout détection villes — bridge.probe() pour diagnostiquer');
+      }
+    }, 5_000);
+    _subs.push(() => clearInterval(_cityPollId));
   },
 
   /**

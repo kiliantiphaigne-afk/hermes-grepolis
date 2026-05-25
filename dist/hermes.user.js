@@ -362,27 +362,29 @@
       function isGameReady() {
         // Le namespace principal doit exister.
         if (typeof window.Game === 'undefined') return false;
+        if (typeof window.MM === 'undefined') return false;
 
-        // Au moins un de ces objets doit être hydraté.
-        // Grepolis.com v2 utilise MM.models, certains mondes ont village_data.
-        const checks = [
-          // Backbone collections des villes du joueur.
-          () => window.Game.village_data && Object.keys(window.Game.village_data).length > 0,
-          // Format alternatif (certains mondes).
-          () => window.MM && window.MM.models && window.MM.models.town_list,
-          // Dernier recours : le menu de navigation est rendu (UI prête).
-          () => document.querySelector('#menu_village_view') !== null,
-          // Autre indicateur UI : la barre de ressources est visible.
-          () => document.querySelector('.resources') !== null,
-        ];
+        // Critère prioritaire : town_list hydraté avec au moins 1 ville.
+        // C'est la condition la plus fiable — si les villes sont là, le jeu est prêt.
+        try {
+          const tl = window.MM && window.MM.models && window.MM.models.town_list;
+          if (tl && tl.models && tl.models.length > 0) return true;
+          // Certaines versions exposent .length directement sans .models
+          if (tl && typeof tl.length === 'number' && tl.length > 0) return true;
+        } catch { /* continue */ }
 
-        return checks.some((check) => {
-          try {
-            return Boolean(check());
-          } catch {
-            return false;
-          }
-        });
+        // Fallback : Game.townId défini = on est dans une ville = jeu prêt.
+        try {
+          if (window.Game.townId && window.Game.townId > 0) return true;
+        } catch { /* continue */ }
+
+        // Fallback UI : barre de ressources visible = jeu interactif.
+        try {
+          if (document.querySelector('.resources_bar') !== null) return true;
+          if (document.querySelector('#toolbar_activity_feed') !== null) return true;
+        } catch { /* continue */ }
+
+        return false;
       }
 
       const pollId = setInterval(() => {
@@ -958,6 +960,26 @@
             const cities = entries.map(parsePlainTownData).filter(Boolean);
             if (cities.length > 0) return cities;
           }
+        }
+
+        // Tentative 4 : Game.townId — au moins récupérer la ville courante
+        const currentTownId = safeGet(window, 'Game.townId');
+        if (currentTownId) {
+          // Chercher dans town_list par ID
+          const townList2 = resolveFirst(PATHS.townList);
+          if (townList2 && typeof townList2.get === 'function') {
+            const model = townList2.get(currentTownId);
+            if (model) {
+              const city = parseTownModel(model);
+              if (city) return [city];
+            }
+          }
+          // Dernier recours : ville minimale avec juste l'ID
+          hermes.log.warn(`getCities: fallback Game.townId=${currentTownId} — données limitées`);
+          return [{ id: currentTownId, name: `Ville ${currentTownId}`, x: 0, y: 0,
+                    resources: { wood: 0, stone: 0, silver: 0 },
+                    buildings: {}, queue: [], population: { current: 0, max: 0 },
+                    specialization: null }];
         }
 
         hermes.log.warn('getCities: aucune source trouvée — bridge.probe() pour diagnostiquer');
@@ -8142,6 +8164,24 @@
 
       // Nettoyer le watchdog au destroy
       _subs.push(() => clearInterval(_watchdogId));
+
+      // Auto-refresh : poll toutes les 5s jusqu'à trouver des villes (max 3 min).
+      // Corrige le problème de timing : Grepolis charge ses données après le boot Hermes.
+      let _cityPollAttempts = 0;
+      const _cityPollId = setInterval(() => {
+        _cityPollAttempts++;
+        let found = 0;
+        try { found = bridge.getCities().length; } catch { /* no-op */ }
+        if (found > 0) {
+          clearInterval(_cityPollId);
+          console.log(`[HERMES] ${found} ville(s) détectée(s) après ${_cityPollAttempts * 5}s`);
+          renderActiveTab();
+        } else if (_cityPollAttempts >= 36) {
+          clearInterval(_cityPollId);
+          console.warn('[HERMES] Timeout détection villes — bridge.probe() pour diagnostiquer');
+        }
+      }, 5_000);
+      _subs.push(() => clearInterval(_cityPollId));
     },
 
     /**

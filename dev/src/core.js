@@ -339,27 +339,29 @@ function waitForGameReady(log) {
     function isGameReady() {
       // Le namespace principal doit exister.
       if (typeof window.Game === 'undefined') return false;
+      if (typeof window.MM === 'undefined') return false;
 
-      // Au moins un de ces objets doit être hydraté.
-      // Grepolis.com v2 utilise MM.models, certains mondes ont village_data.
-      const checks = [
-        // Backbone collections des villes du joueur.
-        () => window.Game.village_data && Object.keys(window.Game.village_data).length > 0,
-        // Format alternatif (certains mondes).
-        () => window.MM && window.MM.models && window.MM.models.town_list,
-        // Dernier recours : le menu de navigation est rendu (UI prête).
-        () => document.querySelector('#menu_village_view') !== null,
-        // Autre indicateur UI : la barre de ressources est visible.
-        () => document.querySelector('.resources') !== null,
-      ];
+      // Critère prioritaire : town_list hydraté avec au moins 1 ville.
+      // C'est la condition la plus fiable — si les villes sont là, le jeu est prêt.
+      try {
+        const tl = window.MM && window.MM.models && window.MM.models.town_list;
+        if (tl && tl.models && tl.models.length > 0) return true;
+        // Certaines versions exposent .length directement sans .models
+        if (tl && typeof tl.length === 'number' && tl.length > 0) return true;
+      } catch { /* continue */ }
 
-      return checks.some((check) => {
-        try {
-          return Boolean(check());
-        } catch {
-          return false;
-        }
-      });
+      // Fallback : Game.townId défini = on est dans une ville = jeu prêt.
+      try {
+        if (window.Game.townId && window.Game.townId > 0) return true;
+      } catch { /* continue */ }
+
+      // Fallback UI : barre de ressources visible = jeu interactif.
+      try {
+        if (document.querySelector('.resources_bar') !== null) return true;
+        if (document.querySelector('#toolbar_activity_feed') !== null) return true;
+      } catch { /* continue */ }
+
+      return false;
     }
 
     const pollId = setInterval(() => {

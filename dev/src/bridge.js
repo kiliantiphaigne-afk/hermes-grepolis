@@ -445,6 +445,26 @@ const bridge = {
         }
       }
 
+      // Tentative 4 : Game.townId — au moins récupérer la ville courante
+      const currentTownId = safeGet(window, 'Game.townId');
+      if (currentTownId) {
+        // Chercher dans town_list par ID
+        const townList2 = resolveFirst(PATHS.townList);
+        if (townList2 && typeof townList2.get === 'function') {
+          const model = townList2.get(currentTownId);
+          if (model) {
+            const city = parseTownModel(model);
+            if (city) return [city];
+          }
+        }
+        // Dernier recours : ville minimale avec juste l'ID
+        hermes.log.warn(`getCities: fallback Game.townId=${currentTownId} — données limitées`);
+        return [{ id: currentTownId, name: `Ville ${currentTownId}`, x: 0, y: 0,
+                  resources: { wood: 0, stone: 0, silver: 0 },
+                  buildings: {}, queue: [], population: { current: 0, max: 0 },
+                  specialization: null }];
+      }
+
       hermes.log.warn('getCities: aucune source trouvée — bridge.probe() pour diagnostiquer');
       return [];
     } catch (err) {
