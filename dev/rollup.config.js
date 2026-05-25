@@ -5,7 +5,7 @@
 const tampermonkeyHeader = `// ==UserScript==
 // @name         Hermes — Grepolis Assistant
 // @namespace    https://github.com/hermes-grepolis
-// @version      1.0.2
+// @version      1.0.3
 // @description  Intelligent automation for Grepolis — farming, building, combat, strategy advisor
 // @author       Hermes
 // @match        *://*.grepolis.com/game/*

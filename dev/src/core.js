@@ -337,28 +337,27 @@ function waitForGameReady(log) {
      * Retourne true si on peut considérer le jeu comme opérationnel.
      */
     function isGameReady() {
-      // Le namespace principal doit exister.
-      if (typeof window.Game === 'undefined') return false;
-      if (typeof window.MM === 'undefined') return false;
+      // Le DOM doit être disponible (document-start peut être appelé trop tôt).
+      if (!document.body) return false;
 
-      // Critère prioritaire : town_list hydraté avec au moins 1 ville.
-      // C'est la condition la plus fiable — si les villes sont là, le jeu est prêt.
+      // Critère fort : town_list hydraté avec au moins 1 ville.
       try {
         const tl = window.MM && window.MM.models && window.MM.models.town_list;
         if (tl && tl.models && tl.models.length > 0) return true;
-        // Certaines versions exposent .length directement sans .models
         if (tl && typeof tl.length === 'number' && tl.length > 0) return true;
       } catch { /* continue */ }
 
-      // Fallback : Game.townId défini = on est dans une ville = jeu prêt.
+      // Game.townId défini = on est dans une ville spécifique = jeu opérationnel.
       try {
-        if (window.Game.townId && window.Game.townId > 0) return true;
+        if (window.Game && window.Game.townId && window.Game.townId > 0) return true;
       } catch { /* continue */ }
 
-      // Fallback UI : barre de ressources visible = jeu interactif.
+      // Fallback UI : barre de ressources ou toolbar = jeu interactif.
       try {
         if (document.querySelector('.resources_bar') !== null) return true;
         if (document.querySelector('#toolbar_activity_feed') !== null) return true;
+        if (document.querySelector('.gp-icon-wood') !== null) return true;
+        if (document.querySelector('#ui_box') !== null) return true;
       } catch { /* continue */ }
 
       return false;

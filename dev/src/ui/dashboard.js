@@ -901,6 +901,12 @@ function subscribeToEvents() {
     renderActiveTab();
   }));
 
+  // Villes trouvées via XHR → refresh immédiat
+  _subs.push(hermes.on('hermes:cities:ready', ({ count }) => {
+    console.log(`[HERMES] ${count} ville(s) capturée(s) via AJAX — refresh dashboard`);
+    renderActiveTab();
+  }));
+
   // Hermes stopped
   _subs.push(hermes.on('hermes:stopped', () => {
     updateStatusBadge();

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hermes — Grepolis Assistant
 // @namespace    https://github.com/hermes-grepolis
-// @version      1.0.2
+// @version      1.0.3
 // @description  Intelligent automation for Grepolis — farming, building, combat, strategy advisor
 // @author       Hermes
 // @match        *://*.grepolis.com/game/*
@@ -360,28 +360,27 @@
        * Retourne true si on peut considérer le jeu comme opérationnel.
        */
       function isGameReady() {
-        // Le namespace principal doit exister.
-        if (typeof window.Game === 'undefined') return false;
-        if (typeof window.MM === 'undefined') return false;
+        // Le DOM doit être disponible (document-start peut être appelé trop tôt).
+        if (!document.body) return false;
 
-        // Critère prioritaire : town_list hydraté avec au moins 1 ville.
-        // C'est la condition la plus fiable — si les villes sont là, le jeu est prêt.
+        // Critère fort : town_list hydraté avec au moins 1 ville.
         try {
           const tl = window.MM && window.MM.models && window.MM.models.town_list;
           if (tl && tl.models && tl.models.length > 0) return true;
-          // Certaines versions exposent .length directement sans .models
           if (tl && typeof tl.length === 'number' && tl.length > 0) return true;
         } catch { /* continue */ }
 
-        // Fallback : Game.townId défini = on est dans une ville = jeu prêt.
+        // Game.townId défini = on est dans une ville spécifique = jeu opérationnel.
         try {
-          if (window.Game.townId && window.Game.townId > 0) return true;
+          if (window.Game && window.Game.townId && window.Game.townId > 0) return true;
         } catch { /* continue */ }
 
-        // Fallback UI : barre de ressources visible = jeu interactif.
+        // Fallback UI : barre de ressources ou toolbar = jeu interactif.
         try {
           if (document.querySelector('.resources_bar') !== null) return true;
           if (document.querySelector('#toolbar_activity_feed') !== null) return true;
+          if (document.querySelector('.gp-icon-wood') !== null) return true;
+          if (document.querySelector('#ui_box') !== null) return true;
         } catch { /* continue */ }
 
         return false;
@@ -837,6 +836,125 @@
     }
   }
 
+  // ─── XHR Interceptor — capture les données de ville depuis les réponses AJAX ──
+
+  /**
+   * Cache des données de villes capturées via XHR.
+   * Clé = String(townId), valeur = plain data object.
+   */
+  const _townCache = new Map();
+
+  /**
+   * Parcourt récursivement un objet JSON pour extraire les données de villes.
+   * Grepolis envoie les données dans des structures variables selon l'endpoint.
+   * @param {*} data
+   * @param {number} [depth=0] — évite les boucles infinies
+   */
+  function extractTownsFromResponse(data, depth = 0) {
+    if (!data || typeof data !== 'object' || depth > 5) return;
+
+    // Pattern 1 : tableau de villes directement
+    if (Array.isArray(data)) {
+      for (const item of data) {
+        if (item && typeof item === 'object' && (item.id || item.town_id) && item.name) {
+          const id = String(item.id ?? item.town_id);
+          _townCache.set(id, item);
+        }
+      }
+      return;
+    }
+
+    // Pattern 2 : { town_list: [...] } ou { towns: [...] } ou { player_towns: [...] }
+    for (const key of ['town_list', 'towns', 'player_towns', 'own_towns', 'villages']) {
+      if (data[key]) {
+        extractTownsFromResponse(data[key], depth + 1);
+      }
+    }
+
+    // Pattern 3 : map { "12345": { name, x, y, ... } } — clés numériques = IDs de villes
+    const entries = Object.entries(data);
+    if (entries.length > 0 && entries.length < 200) {
+      for (const [key, val] of entries) {
+        if (val && typeof val === 'object' && !Array.isArray(val)) {
+          const hasId   = val.id || val.town_id || /^\d+$/.test(key);
+          const hasName = val.name || val.town_name;
+          const hasPos  = val.x !== undefined || val.coord_x !== undefined || val.island_x !== undefined;
+          if (hasId && hasName && hasPos) {
+            const id = String(val.id ?? val.town_id ?? key);
+            _townCache.set(id, { ...val, id });
+          }
+          // Descendre dans les objets imbriqués
+          if (val.data || val.payload || val.result || val.response) {
+            extractTownsFromResponse(val, depth + 1);
+          }
+        }
+      }
+    }
+
+    // Pattern 4 : wrapper standard Grepolis { data: { ... } }
+    if (data.data)     extractTownsFromResponse(data.data,    depth + 1);
+    if (data.payload)  extractTownsFromResponse(data.payload, depth + 1);
+    if (data.result)   extractTownsFromResponse(data.result,  depth + 1);
+    if (data.response) extractTownsFromResponse(data.response,depth + 1);
+  }
+
+  /**
+   * Installe les hooks XHR et fetch pour capturer les réponses Grepolis.
+   * Doit être appelé le plus tôt possible (avant les premières requêtes du jeu).
+   */
+  function installXHRHook() {
+    try {
+      // ── Hook XMLHttpRequest ────────────────────────────────────────────────
+      const _origOpen = XMLHttpRequest.prototype.open;
+      const _origSend = XMLHttpRequest.prototype.send;
+
+      XMLHttpRequest.prototype.open = function (method, url, ...args) {
+        this._hermesUrl = String(url ?? '');
+        return _origOpen.call(this, method, url, ...args);
+      };
+
+      XMLHttpRequest.prototype.send = function (...args) {
+        this.addEventListener('load', function () {
+          try {
+            if (!this.responseText || this.responseText.length > 2_000_000) return;
+            const json = JSON.parse(this.responseText);
+            const before = _townCache.size;
+            extractTownsFromResponse(json);
+            if (_townCache.size > before) {
+              hermes.emit('bridge:towns:updated', { count: _townCache.size });
+            }
+          } catch { /* pas du JSON — ignorer */ }
+        });
+        return _origSend.call(this, ...args);
+      };
+
+      // ── Hook fetch ─────────────────────────────────────────────────────────
+      if (typeof window.fetch === 'function') {
+        const _origFetch = window.fetch.bind(window);
+        window.fetch = async function (...args) {
+          const response = await _origFetch(...args);
+          try {
+            const clone = response.clone();
+            clone.text().then((text) => {
+              if (!text || text.length > 2_000_000) return;
+              const json = JSON.parse(text);
+              const before = _townCache.size;
+              extractTownsFromResponse(json);
+              if (_townCache.size > before) {
+                hermes.emit('bridge:towns:updated', { count: _townCache.size });
+              }
+            }).catch(() => {});
+          } catch { /* pas du JSON */ }
+          return response;
+        };
+      }
+
+      hermes.log.info('XHR/fetch hooks installés — capture des données Grepolis active');
+    } catch (err) {
+      hermes.log.warn('installXHRHook failed', err);
+    }
+  }
+
   // ─── Event Hooks Backbone ─────────────────────────────────────────────────────
 
   /**
@@ -982,7 +1100,18 @@
                     specialization: null }];
         }
 
-        hermes.log.warn('getCities: aucune source trouvée — bridge.probe() pour diagnostiquer');
+        // Tentative 5 : cache XHR — données capturées depuis les réponses AJAX Grepolis
+        if (_townCache.size > 0) {
+          const cities = Array.from(_townCache.values())
+            .map(parsePlainTownData)
+            .filter(Boolean);
+          if (cities.length > 0) {
+            hermes.log.debug(`getCities: ${cities.length} villes via cache XHR`);
+            return cities;
+          }
+        }
+
+        hermes.log.warn('getCities: aucune source trouvée — attente des réponses AJAX…');
         return [];
       } catch (err) {
         hermes.log.error('getCities failed', err);
@@ -1425,20 +1554,30 @@
     init() {
       hermes.log.info('GameBridge: initialisation…');
 
-      // Log direct dans la console pour faciliter le debug.
-      console.group('[HERMES Bridge] Détection structure Grepolis');
-      if (typeof window.Game !== 'undefined') {
-        console.log('window.Game:', Object.keys(window.Game).slice(0, 25).join(', '));
-        if (window.Game.village_data) {
-          const n = Object.keys(window.Game.village_data).length;
-          console.log(`village_data: ${n} villes`);
+      // Installer le hook XHR/fetch en premier pour capturer les données dès maintenant.
+      installXHRHook();
+
+      // Écouter l'event de mise à jour du cache pour re-render le dashboard.
+      hermes.on('bridge:towns:updated', ({ count }) => {
+        hermes.log.info(`Bridge: ${count} villes capturées via AJAX`);
+        hermes.emit('hermes:cities:ready', { count });
+      });
+
+      // Log console pour diagnostiquer la structure Grepolis.
+      console.group('[HERMES Bridge] Structure Grepolis');
+      try {
+        if (typeof window.Game !== 'undefined') {
+          console.log('window.Game keys:', Object.keys(window.Game).slice(0, 30).join(', '));
+          if (window.Game.townId) console.log('Game.townId:', window.Game.townId);
+        } else {
+          console.warn('window.Game: absent');
         }
-      } else {
-        console.warn('window.Game: non disponible au moment du bridge.init()');
-      }
-      if (typeof window.MM !== 'undefined') {
-        console.log('MM.models:', Object.keys(window.MM?.models ?? {}).join(', '));
-      }
+        if (typeof window.MM !== 'undefined' && window.MM.models) {
+          console.log('MM.models keys:', Object.keys(window.MM.models).join(', '));
+        } else {
+          console.warn('window.MM: absent');
+        }
+      } catch (e) { console.warn('Bridge diagnostic error', e); }
       console.groupEnd();
 
       // Attacher les hooks Backbone.
@@ -1447,7 +1586,7 @@
       // Enregistrer le bridge dans hermes pour que les modules puissent y accéder.
       hermes.setBridge(bridge);
 
-      hermes.log.info('GameBridge: prêt');
+      hermes.log.info('GameBridge: prêt — hook XHR actif');
     },
   };
 
@@ -8028,6 +8167,12 @@
     // Hermes ready
     _subs.push(hermes.on('hermes:ready', () => {
       updateStatusBadge();
+      renderActiveTab();
+    }));
+
+    // Villes trouvées via XHR → refresh immédiat
+    _subs.push(hermes.on('hermes:cities:ready', ({ count }) => {
+      console.log(`[HERMES] ${count} ville(s) capturée(s) via AJAX — refresh dashboard`);
       renderActiveTab();
     }));
 
