@@ -96,7 +96,11 @@ const PATHS = {
   farmVillages: [
     'MM.models.farm_towns',
     'MM.models.farm_villages',
+    'MM.models.farmTowns',
+    'MM.models.island_farm_towns',
     'Game.models.farm_towns',
+    'Game.farm_towns',
+    'Game.farm_villages',
   ],
   // Données du monde (vitesse, système, etc.)
   worldSettings: [
@@ -288,41 +292,121 @@ function parseBuildQueue(model) {
 }
 
 /**
- * Convertit un modèle de village fermier en objet FarmVillage Hermes.
- * @param {object} model - Backbone.Model
+ * Convertit un modèle de village fermier (Backbone ou plain) en FarmVillage Hermes.
+ * @param {object} model - Backbone.Model ou plain object
  * @returns {import('./types').FarmVillage|null}
  */
 function parseFarmVillageModel(model) {
   if (!model) return null;
   try {
-    const id       = model.get('id') ?? model.id;
-    const name     = model.get('name') ?? `Village ${id}`;
-    const mood     = parseInt(model.get('mood') ?? 100, 10);
-    // Timestamps en secondes Unix.
-    const lastDemandTs  = model.get('last_demand_sent_at') ?? 0;
-    const lastLootTs    = model.get('last_loot_sent_at')   ?? 0;
-    // Cooldown restant (en ms pour faciliter l'usage dans HumanEngine).
-    const cooldownTs    = model.get('next_action_at') ?? model.get('cooldown_end') ?? 0;
+    // Support Backbone model ET plain object
+    const get = typeof model.get === 'function'
+      ? (k) => model.get(k)
+      : (k) => model[k];
 
+    const id   = get('id')   ?? model.id;
+    const name = get('name') ?? `Village ${id}`;
+    if (!id) return null;
+
+    const mood = parseInt(get('mood') ?? get('happiness') ?? 100, 10);
+
+    // Timestamps cooldown — plusieurs noms possibles selon version Grepolis
+    const cooldownTs = get('next_action_at')   ?? get('cooldown_end')
+                    ?? get('next_attack_at')   ?? get('refresh_at') ?? 0;
+    const lastDemandTs = get('last_demand_sent_at') ?? get('last_demand') ?? 0;
+    const lastLootTs   = get('last_loot_sent_at')   ?? get('last_loot')   ?? 0;
+
+    // Ressources — Grepolis appelle le silver "iron" dans les farm villages
     const resources = {
-      wood:   parseInt(model.get('wood')  ?? 0, 10),
-      stone:  parseInt(model.get('stone') ?? 0, 10),
-      silver: parseInt(model.get('iron')  ?? model.get('silver') ?? 0, 10),
+      wood:   parseInt(get('wood')  ?? get('lumber') ?? 0, 10),
+      stone:  parseInt(get('stone') ?? get('rock')   ?? 0, 10),
+      silver: parseInt(get('iron')  ?? get('silver') ?? get('favor') ?? 0, 10),
     };
 
-    return {
-      id,
-      name,
-      mood,
-      lastDemand:         lastDemandTs,
-      lastLoot:           lastLootTs,
-      resources,
-      cooldownRemaining:  msUntil(cooldownTs),
-    };
+    // IDs de lien île/ville
+    const islandId  = get('island_id') ?? get('isle_id') ?? null;
+    const linkedId  = get('linked_town_id') ?? get('town_id') ?? get('city_id') ?? null;
+
+    return { id, name, mood, islandId, linkedId, lastDemand: lastDemandTs,
+             lastLoot: lastLootTs, resources, cooldownRemaining: msUntil(cooldownTs) };
   } catch (err) {
     hermes.log.warn('parseFarmVillageModel error', err);
     return null;
   }
+}
+
+/**
+ * Vérifie si un plain object ressemble à un village fermier Grepolis.
+ * @param {*} o
+ * @returns {boolean}
+ */
+function looksLikeFarmVillage(o) {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return false;
+  const hasId   = 'id' in o || 'village_id' in o;
+  const hasName = 'name' in o && o.name && typeof o.name === 'string';
+  const hasMood = 'mood' in o || 'happiness' in o;
+  // Farm villages ont toujours mood ET pas de bâtiments (différencie des villes)
+  const hasNoBuildings = !('main' in o) && !('senate' in o) && !('buildings' in o);
+  return hasId && hasName && hasMood && hasNoBuildings;
+}
+
+/**
+ * Scan global de window pour trouver les collections de farm villages.
+ * @param {string|number|null} cityIslandId - Island ID de la ville cible (pour filtrer)
+ * @returns {object[]} Array de raw data objects
+ */
+function findFarmVillagesAnywhere(cityIslandId = null) {
+  const seen = new WeakSet();
+
+  function scanForFarms(root, depth = 0) {
+    if (!root || typeof root !== 'object' || depth > 4) return [];
+    try { if (seen.has(root)) return []; seen.add(root); } catch { return []; }
+
+    // Backbone collection
+    if (Array.isArray(root.models) && root.models.length > 0) {
+      const raw0 = typeof root.models[0].toJSON === 'function'
+        ? root.models[0].toJSON()
+        : root.models[0];
+      if (looksLikeFarmVillage(raw0)) {
+        return root.models.map((m) =>
+          typeof m.toJSON === 'function' ? m.toJSON() : m
+        ).filter(looksLikeFarmVillage);
+      }
+    }
+
+    // Tableau direct
+    if (Array.isArray(root) && root.length > 0 && looksLikeFarmVillage(root[0])) {
+      return root.filter(looksLikeFarmVillage);
+    }
+
+    // Map { id: {...} }
+    const entries = Object.entries(root);
+    if (entries.length < 300) {
+      const farms = entries.map(([, v]) => v).filter(looksLikeFarmVillage);
+      if (farms.length > 0) return farms;
+    }
+
+    // Descente
+    for (const [, val] of Object.entries(root)) {
+      if (!val || typeof val !== 'object' || val instanceof Node) continue;
+      try {
+        const sub = scanForFarms(val, depth + 1);
+        if (sub.length > 0) return sub;
+      } catch { /* skip */ }
+    }
+    return [];
+  }
+
+  for (const ns of ['MM', 'Game', 'GameData']) {
+    try {
+      const farms = scanForFarms(_uw[ns]);
+      if (farms.length > 0) {
+        hermes.log.info(`findFarmVillagesAnywhere: ${farms.length} villages via window.${ns}`);
+        return farms;
+      }
+    } catch { /* skip */ }
+  }
+  return [];
 }
 
 // ─── Scanner global — trouve les villes n'importe où dans window ─────────────
@@ -824,30 +908,113 @@ const bridge = {
    * Retourne les villages fermiers associés à une ville.
    * Les farm villages sont liés à l'île sur laquelle se trouve la ville.
    *
+   * Stratégie multi-sources (comme getCities) :
+   *   1. Backbone farm_towns collection
+   *   2. Plain object / map
+   *   3. Scan global findFarmVillagesAnywhere()
+   *
+   * Le filtre de rattachement est soit linked_town_id == cityId,
+   * soit island_id == city.island_id (les villages sont sur la même île que la ville).
+   *
+   * NOTE : Les villages ne sont chargés par Grepolis que si le joueur
+   * a ouvert la vue île au moins une fois dans la session.
+   *
    * @param {string|number} cityId
    * @returns {import('./types').FarmVillage[]}
    */
   getFarmingVillages(cityId) {
     try {
-      const farmList = resolveFirst(PATHS.farmVillages);
-      if (!farmList) {
-        hermes.log.warn('getFarmingVillages: farm_towns non trouvé');
-        return [];
+      // ── 1. Récupérer l'island_id de la ville ─────────────────────────────
+      // Grepolis lie les farm villages à l'île (island_id), pas à la ville directement.
+      // Chercher island_id sur le modèle Backbone de la ville en priorité.
+      let cityIslandId = null;
+      try {
+        const townList = resolveFirst(PATHS.townList);
+        if (townList) {
+          const model = typeof townList.get === 'function'
+            ? townList.get(cityId)
+            : (townList.models ?? []).find((m) => (m.get?.('id') ?? m.id) == cityId);
+          if (model) {
+            const g = typeof model.get === 'function' ? (k) => model.get(k) : (k) => model[k];
+            cityIslandId = g('island_id') ?? g('isle_id') ?? null;
+          }
+        }
+        // Fallback : chercher island_id dans le cache XHR
+        if (cityIslandId == null && _townCache.size > 0) {
+          const cached = _townCache.get(String(cityId));
+          if (cached) cityIslandId = cached.island_id ?? cached.isle_id ?? null;
+        }
+      } catch { /* skip */ }
+
+      hermes.log.debug(`getFarmingVillages(${cityId}): island_id=${cityIslandId}`);
+
+      /**
+       * Détermine si un village fermier est rattaché à cette ville.
+       * @param {object} m - Backbone model ou plain object
+       * @returns {boolean}
+       */
+      function isLinkedToCity(m) {
+        const g = typeof m.get === 'function' ? (k) => m.get(k) : (k) => m[k];
+        const linkedId = g('linked_town_id') ?? g('town_id') ?? g('city_id');
+        const islandId = g('island_id') ?? g('isle_id');
+        if (linkedId != null && String(linkedId) === String(cityId)) return true;
+        if (cityIslandId != null && islandId != null && String(islandId) === String(cityIslandId)) return true;
+        // Si aucun attribut de lien disponible → inclure (on ne peut pas filtrer)
+        if (linkedId == null && islandId == null) return true;
+        return false;
       }
-      const models = farmList.models ?? Object.values(farmList);
 
-      // Filtrer les villages liés à la ville (par town_id ou island).
-      const city = this.getCity(cityId);
-      const filtered = city
-        ? models.filter((m) => {
-            const linkedId = m.get('linked_town_id') ?? m.get('town_id');
-            return linkedId == cityId; // == intentionnel (int vs string)
-          })
-        : models;
+      // ── 2. Backbone / plain object via chemins connus ─────────────────────
+      const farmList = resolveFirst(PATHS.farmVillages);
+      if (farmList) {
+        let models;
+        if (Array.isArray(farmList.models) && farmList.models.length > 0) {
+          models = farmList.models;
+        } else if (Array.isArray(farmList) && farmList.length > 0) {
+          models = farmList;
+        } else {
+          // Map { id: {...} } ou objet quelconque
+          const vals = Object.values(farmList).filter((v) => v && typeof v === 'object');
+          models = vals.length > 0 ? vals : null;
+        }
 
-      return filtered
-        .map(parseFarmVillageModel)
-        .filter(Boolean);
+        if (models && models.length > 0) {
+          const filtered = models.filter(isLinkedToCity);
+          const villages = (filtered.length > 0 ? filtered : models)
+            .map(parseFarmVillageModel)
+            .filter(Boolean);
+          if (villages.length > 0) {
+            hermes.log.info(`getFarmingVillages: ${villages.length} villages via PATHS`);
+            return villages;
+          }
+        }
+      }
+
+      // ── 3. Scan global window ─────────────────────────────────────────────
+      const rawFarms = findFarmVillagesAnywhere(cityIslandId);
+      if (rawFarms.length > 0) {
+        const filtered = rawFarms.filter((f) => {
+          const linkedId = f.linked_town_id ?? f.town_id ?? f.city_id;
+          const islandId = f.island_id ?? f.isle_id;
+          if (linkedId != null && String(linkedId) === String(cityId)) return true;
+          if (cityIslandId != null && islandId != null && String(islandId) === String(cityIslandId)) return true;
+          if (linkedId == null && islandId == null) return true;
+          return false;
+        });
+        const villages = (filtered.length > 0 ? filtered : rawFarms)
+          .map(parseFarmVillageModel)
+          .filter(Boolean);
+        if (villages.length > 0) {
+          hermes.log.info(`getFarmingVillages: ${villages.length} villages via scan global`);
+          return villages;
+        }
+      }
+
+      hermes.log.warn(
+        `getFarmingVillages(${cityId}): aucun village trouvé. ` +
+        `Ouvrez la vue île dans le jeu pour charger les données.`
+      );
+      return [];
     } catch (err) {
       hermes.log.error(`getFarmingVillages(${cityId}) failed`, err);
       return [];
