@@ -9,10 +9,13 @@ const tampermonkeyHeader = `// ==UserScript==
 // @description  Intelligent automation for Grepolis — farming, building, combat, strategy advisor
 // @author       Hermes
 // @match        *://*.grepolis.com/game/*
+// @match        *://*.grepolis.com/game/
+// @match        *://grepolis.com/game/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
 // @grant        GM_notification
+// @grant        GM_addStyle
 // @run-at       document-idle
 // @updateURL    https://raw.githubusercontent.com/kiliantiphaigne-afk/hermes-grepolis/main/dist/hermes.user.js
 // @downloadURL  https://raw.githubusercontent.com/kiliantiphaigne-afk/hermes-grepolis/main/dist/hermes.user.js

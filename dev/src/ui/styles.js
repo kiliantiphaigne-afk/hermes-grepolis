@@ -898,11 +898,22 @@ export function injectStyles() {
     return; // Déjà injecté
   }
 
+  // GM_addStyle bypasse le CSP de Grepolis (injecté par Tampermonkey lui-même).
+  if (typeof GM_addStyle === 'function') {
+    GM_addStyle(CSS);
+    // Marqueur pour éviter la double injection
+    const marker = document.createElement('meta');
+    marker.id = STYLE_ID;
+    (document.head || document.documentElement).appendChild(marker);
+    return;
+  }
+
+  // Fallback : injection manuelle via <style> dans <head> ou <html>
   const style = document.createElement('style');
   style.id    = STYLE_ID;
   style.type  = 'text/css';
   style.textContent = CSS;
-  document.head.appendChild(style);
+  (document.head || document.documentElement).appendChild(style);
 }
 
 /**

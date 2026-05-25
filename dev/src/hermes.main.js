@@ -23,6 +23,12 @@ import { bridge }  from './bridge.js';
 import { storage } from './storage.js';
 import { human }   from './engine/human.js';
 
+// Confirmation immédiate que le script est chargé par Tampermonkey.
+console.log(
+  '%c[HERMES] ⚡ Script chargé — ' + window.location.href,
+  'color:#4ade80;font-weight:bold;font-size:12px;background:#1a1a2e;padding:3px 6px;border-radius:3px'
+);
+
 // ─── Modules core : registration explicite (ordre de boot contrôlé) ───────────
 
 hermes.register('storage', {

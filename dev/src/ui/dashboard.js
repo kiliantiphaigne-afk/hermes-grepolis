@@ -67,14 +67,14 @@ const _subs = [];
  */
 function buildHTML() {
   const tabButtons = TABS.map((t) => `
-    <button class='hermes-tab${t.id === _activeTab ? ' active' : ''}" data-tab="${t.id}">
+    <button class="hermes-tab${t.id === _activeTab ? ' active' : ''}" data-tab="${t.id}">
       ${t.label}
       <span class="hermes-tab-badge" data-badge="${t.id}"></span>
     </button>
   `).join('');
 
   const tabPanels = TABS.map((t) => `
-    <div class='hermes-tab-panel${t.id === _activeTab ? ' active' : ''}" id="hermes-tab-${t.id}">
+    <div class="hermes-tab-panel${t.id === _activeTab ? ' active' : ''}" id="hermes-tab-${t.id}">
       <div class="hermes-loading"><div class="hermes-spinner"></div>Chargement…</div>
     </div>
   `).join('');
@@ -615,7 +615,7 @@ function renderLogs() {
 
   const levels   = ['ALL', 'DEBUG', 'INFO', 'WARN', 'ERROR'];
   const filterBtns = levels.map((l) => `
-    <button class='hermes-filter-btn ${l} ${_logFilter === l ? 'active' : ''}" data-level="${l}">${l}</button>
+    <button class="hermes-filter-btn ${l} ${_logFilter === l ? 'active' : ''}" data-level="${l}">${l}</button>
   `).join('');
 
   const filtered = _logFilter === 'ALL'
@@ -935,23 +935,65 @@ export const dashboard = {
    */
   init() {
     // Ne pas injecter deux fois
-    if ($(`#${PANEL_ID}`) || document.getElementById(PANEL_ID)) {
+    if (document.getElementById(PANEL_ID)) {
       hermes.log.warn('Dashboard: déjà injecté — init() ignoré');
       return;
     }
 
+    console.log(
+      '%c[HERMES] ⚡ Démarrage dashboard…',
+      'color:#4ade80;font-weight:bold;font-size:14px;background:#1a1a2e;padding:4px 8px;border-radius:4px'
+    );
+
     injectStyles();
 
     // Injecter le HTML du panneau
-    const wrapper    = document.createElement('div');
+    const wrapper     = document.createElement('div');
     wrapper.innerHTML = buildHTML().trim();
     _panelEl          = wrapper.firstElementChild;
-    document.body.appendChild(_panelEl);
+
+    if (!_panelEl) {
+      console.error('[HERMES] buildHTML() a retourné un élément null — abandon');
+      return;
+    }
+
+    // Appliquer les styles inline critiques pour survivre aux CSS de Grepolis.
+    // position:fixed peut être cassé si Grepolis applique transform sur body —
+    // on injecte dans <html> pour éviter ce problème.
+    _panelEl.style.cssText = [
+      'position:fixed !important',
+      'top:60px !important',
+      'right:16px !important',
+      'z-index:2147483647 !important',
+      'width:380px !important',
+      'display:block !important',
+      'visibility:visible !important',
+      'opacity:1 !important',
+      'pointer-events:auto !important',
+    ].join(';');
+
+    // Injection dans <html> (pas dans <body>) pour éviter que transform/filter
+    // de Grepolis ne brise position:fixed.
+    (document.documentElement || document.body).appendChild(_panelEl);
+
+    console.log('[HERMES] Panel injecté dans le DOM :', _panelEl);
 
     restorePosition();
     setupDrag();
     setupEventListeners();
     subscribeToEvents();
+
+    // Raccourci Ctrl+Shift+H pour afficher/masquer le panel
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'H') {
+        e.preventDefault();
+        const p = document.getElementById(PANEL_ID);
+        if (p) {
+          p.style.display = p.style.display === 'none' ? 'block' : 'none';
+          console.log('[HERMES] Panel togglé — Ctrl+Shift+H');
+        }
+      }
+    });
 
     // Initialiser les logs depuis le buffer existant
     try {
@@ -967,6 +1009,7 @@ export const dashboard = {
     updateStatusBadge();
 
     hermes.log.info('Dashboard: injecté');
+    console.log('%c[HERMES] ✅ Panel prêt — Ctrl+Shift+H pour masquer/afficher', 'color:#4ade80;font-weight:bold');
   },
 
   /**

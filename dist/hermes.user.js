@@ -5,10 +5,13 @@
 // @description  Intelligent automation for Grepolis — farming, building, combat, strategy advisor
 // @author       Hermes
 // @match        *://*.grepolis.com/game/*
+// @match        *://*.grepolis.com/game/
+// @match        *://grepolis.com/game/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
 // @grant        GM_notification
+// @grant        GM_addStyle
 // @run-at       document-idle
 // @updateURL    https://raw.githubusercontent.com/kiliantiphaigne-afk/hermes-grepolis/main/dist/hermes.user.js
 // @downloadURL  https://raw.githubusercontent.com/kiliantiphaigne-afk/hermes-grepolis/main/dist/hermes.user.js
@@ -6937,11 +6940,22 @@
       return; // Déjà injecté
     }
 
+    // GM_addStyle bypasse le CSP de Grepolis (injecté par Tampermonkey lui-même).
+    if (typeof GM_addStyle === 'function') {
+      GM_addStyle(CSS);
+      // Marqueur pour éviter la double injection
+      const marker = document.createElement('meta');
+      marker.id = STYLE_ID;
+      (document.head || document.documentElement).appendChild(marker);
+      return;
+    }
+
+    // Fallback : injection manuelle via <style> dans <head> ou <html>
     const style = document.createElement('style');
     style.id    = STYLE_ID;
     style.type  = 'text/css';
     style.textContent = CSS;
-    document.head.appendChild(style);
+    (document.head || document.documentElement).appendChild(style);
   }
 
   /**
@@ -7015,14 +7029,14 @@
    */
   function buildHTML() {
     const tabButtons = TABS.map((t) => `
-    <button class='hermes-tab${t.id === _activeTab ? ' active' : ''}" data-tab="${t.id}">
+    <button class="hermes-tab${t.id === _activeTab ? ' active' : ''}" data-tab="${t.id}">
       ${t.label}
       <span class="hermes-tab-badge" data-badge="${t.id}"></span>
     </button>
   `).join('');
 
     const tabPanels = TABS.map((t) => `
-    <div class='hermes-tab-panel${t.id === _activeTab ? ' active' : ''}" id="hermes-tab-${t.id}">
+    <div class="hermes-tab-panel${t.id === _activeTab ? ' active' : ''}" id="hermes-tab-${t.id}">
       <div class="hermes-loading"><div class="hermes-spinner"></div>Chargement…</div>
     </div>
   `).join('');
@@ -7563,7 +7577,7 @@
 
     const levels   = ['ALL', 'DEBUG', 'INFO', 'WARN', 'ERROR'];
     const filterBtns = levels.map((l) => `
-    <button class='hermes-filter-btn ${l} ${_logFilter === l ? 'active' : ''}" data-level="${l}">${l}</button>
+    <button class="hermes-filter-btn ${l} ${_logFilter === l ? 'active' : ''}" data-level="${l}">${l}</button>
   `).join('');
 
     const filtered = _logFilter === 'ALL'
@@ -7883,23 +7897,65 @@
      */
     init() {
       // Ne pas injecter deux fois
-      if ($(`#${PANEL_ID}`) || document.getElementById(PANEL_ID)) {
+      if (document.getElementById(PANEL_ID)) {
         hermes.log.warn('Dashboard: déjà injecté — init() ignoré');
         return;
       }
 
+      console.log(
+        '%c[HERMES] ⚡ Démarrage dashboard…',
+        'color:#4ade80;font-weight:bold;font-size:14px;background:#1a1a2e;padding:4px 8px;border-radius:4px'
+      );
+
       injectStyles();
 
       // Injecter le HTML du panneau
-      const wrapper    = document.createElement('div');
+      const wrapper     = document.createElement('div');
       wrapper.innerHTML = buildHTML().trim();
       _panelEl          = wrapper.firstElementChild;
-      document.body.appendChild(_panelEl);
+
+      if (!_panelEl) {
+        console.error('[HERMES] buildHTML() a retourné un élément null — abandon');
+        return;
+      }
+
+      // Appliquer les styles inline critiques pour survivre aux CSS de Grepolis.
+      // position:fixed peut être cassé si Grepolis applique transform sur body —
+      // on injecte dans <html> pour éviter ce problème.
+      _panelEl.style.cssText = [
+        'position:fixed !important',
+        'top:60px !important',
+        'right:16px !important',
+        'z-index:2147483647 !important',
+        'width:380px !important',
+        'display:block !important',
+        'visibility:visible !important',
+        'opacity:1 !important',
+        'pointer-events:auto !important',
+      ].join(';');
+
+      // Injection dans <html> (pas dans <body>) pour éviter que transform/filter
+      // de Grepolis ne brise position:fixed.
+      (document.documentElement || document.body).appendChild(_panelEl);
+
+      console.log('[HERMES] Panel injecté dans le DOM :', _panelEl);
 
       restorePosition();
       setupDrag();
       setupEventListeners();
       subscribeToEvents();
+
+      // Raccourci Ctrl+Shift+H pour afficher/masquer le panel
+      document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.shiftKey && e.key === 'H') {
+          e.preventDefault();
+          const p = document.getElementById(PANEL_ID);
+          if (p) {
+            p.style.display = p.style.display === 'none' ? 'block' : 'none';
+            console.log('[HERMES] Panel togglé — Ctrl+Shift+H');
+          }
+        }
+      });
 
       // Initialiser les logs depuis le buffer existant
       try {
@@ -7915,6 +7971,7 @@
       updateStatusBadge();
 
       hermes.log.info('Dashboard: injecté');
+      console.log('%c[HERMES] ✅ Panel prêt — Ctrl+Shift+H pour masquer/afficher', 'color:#4ade80;font-weight:bold');
     },
 
     /**
@@ -8037,6 +8094,12 @@
    * WorldAnalyzer doit être prêt AVANT situation et advisor (ils en dépendent).
    */
 
+
+  // Confirmation immédiate que le script est chargé par Tampermonkey.
+  console.log(
+    '%c[HERMES] ⚡ Script chargé — ' + window.location.href,
+    'color:#4ade80;font-weight:bold;font-size:12px;background:#1a1a2e;padding:3px 6px;border-radius:3px'
+  );
 
   // ─── Modules core : registration explicite (ordre de boot contrôlé) ───────────
 
