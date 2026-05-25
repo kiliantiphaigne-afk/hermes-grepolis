@@ -5,7 +5,7 @@
 const tampermonkeyHeader = `// ==UserScript==
 // @name         Hermes — Grepolis Assistant
 // @namespace    https://github.com/hermes-grepolis
-// @version      1.0.3
+// @version      1.0.4
 // @description  Intelligent automation for Grepolis — farming, building, combat, strategy advisor
 // @author       Hermes
 // @match        *://*.grepolis.com/game/*
@@ -18,6 +18,7 @@ const tampermonkeyHeader = `// ==UserScript==
 // @grant        GM_xmlhttpRequest
 // @grant        GM_notification
 // @grant        GM_addStyle
+// @grant        unsafeWindow
 // @run-at       document-idle
 // @updateURL    https://raw.githubusercontent.com/kiliantiphaigne-afk/hermes-grepolis/main/dist/hermes.user.js
 // @downloadURL  https://raw.githubusercontent.com/kiliantiphaigne-afk/hermes-grepolis/main/dist/hermes.user.js

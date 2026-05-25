@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hermes — Grepolis Assistant
 // @namespace    https://github.com/hermes-grepolis
-// @version      1.0.3
+// @version      1.0.4
 // @description  Intelligent automation for Grepolis — farming, building, combat, strategy advisor
 // @author       Hermes
 // @match        *://*.grepolis.com/game/*
@@ -14,6 +14,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_notification
 // @grant        GM_addStyle
+// @grant        unsafeWindow
 // @run-at       document-idle
 // @updateURL    https://raw.githubusercontent.com/kiliantiphaigne-afk/hermes-grepolis/main/dist/hermes.user.js
 // @downloadURL  https://raw.githubusercontent.com/kiliantiphaigne-afk/hermes-grepolis/main/dist/hermes.user.js
@@ -585,6 +586,11 @@
     return Math.max(0, unixTimestamp * 1000 - Date.now());
   }
 
+  // ─── Référence à unsafeWindow (page réelle, hors sandbox Tampermonkey) ──────
+  // unsafeWindow est injecté par Tampermonkey via @grant unsafeWindow.
+  // Si absent, on tombe sur window qui est déjà un proxy de la page.
+  const _uw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+
   // ─── Résolution des objets Backbone ──────────────────────────────────────────
 
   /**
@@ -836,6 +842,167 @@
     }
   }
 
+  // ─── Scanner global — trouve les villes n'importe où dans window ─────────────
+
+  /**
+   * Vérifie si un plain object ressemble à une ville Grepolis.
+   * @param {*} o
+   * @returns {boolean}
+   */
+  function looksLikeTown(o) {
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return false;
+    const hasId   = 'id' in o || 'town_id' in o || 'village_id' in o;
+    const hasName = 'name' in o && o.name && typeof o.name === 'string' && o.name.length > 0;
+    const hasPos  = 'x' in o || 'y' in o || 'coord_x' in o || 'island_x' in o;
+    return hasId && hasName && hasPos;
+  }
+
+  /**
+   * Extrait les données brutes d'un modèle (Backbone ou plain object).
+   * @param {*} m
+   * @returns {object|null}
+   */
+  function extractRaw(m) {
+    if (!m) return null;
+    try {
+      if (typeof m.toJSON === 'function') return m.toJSON();
+      if (typeof m.get    === 'function') {
+        return {
+          id:   m.get('id')   ?? m.id,
+          name: m.get('name') ?? m.get('town_name'),
+          x:    m.get('x')    ?? m.get('coord_x'),
+          y:    m.get('y')    ?? m.get('coord_y'),
+          wood: m.get('wood'), stone: m.get('stone'), iron: m.get('iron'),
+          pop:  m.get('pop'),  pop_max: m.get('pop_max'),
+        };
+      }
+      return m;
+    } catch { return null; }
+  }
+
+  /**
+   * Scan récursif de l'arbre de propriétés d'un objet.
+   * Retourne tous les objets qui ressemblent à des collections de villes.
+   * @param {*}      root
+   * @param {number} maxDepth
+   * @param {WeakSet} seen
+   * @returns {object[]}
+   */
+  function deepScanForTowns(root, maxDepth = 4, seen = new WeakSet()) {
+    const found = [];
+    if (!root || typeof root !== 'object') return found;
+    try { if (seen.has(root)) return found; seen.add(root); } catch { return found; }
+
+    // Cas 1 : collection Backbone (a .models array)
+    if (Array.isArray(root.models) && root.models.length > 0) {
+      const sample = extractRaw(root.models[0]);
+      if (sample && looksLikeTown(sample)) {
+        for (const m of root.models) {
+          const raw = extractRaw(m);
+          if (raw && looksLikeTown(raw)) found.push(raw);
+        }
+        return found;
+      }
+    }
+
+    // Cas 2 : tableau direct
+    if (Array.isArray(root) && root.length > 0) {
+      const sample = extractRaw(root[0]);
+      if (sample && looksLikeTown(sample)) {
+        for (const m of root) {
+          const raw = extractRaw(m);
+          if (raw && looksLikeTown(raw)) found.push(raw);
+        }
+        return found;
+      }
+    }
+
+    // Cas 3 : map numérique { "12345": { name, x, y... } }
+    const entries = Object.entries(root);
+    if (entries.length > 0 && entries.length < 500) {
+      let townLikeCount = 0;
+      const candidates = [];
+      for (const [, val] of entries) {
+        if (looksLikeTown(val)) { townLikeCount++; candidates.push(val); }
+      }
+      if (townLikeCount > 0 && townLikeCount >= Math.min(entries.length, 1)) {
+        found.push(...candidates);
+        if (found.length > 0) return found;
+      }
+    }
+
+    // Descente récursive
+    if (maxDepth > 0) {
+      for (const [key, val] of Object.entries(root)) {
+        if (!val || typeof val !== 'object') continue;
+        if (val instanceof Node || val instanceof Window) continue;
+        try {
+          const sub = deepScanForTowns(val, maxDepth - 1, seen);
+          found.push(...sub);
+          if (found.length > 0) return found; // Stop dès qu'on trouve
+        } catch { /* propriété inaccessible */ }
+      }
+    }
+
+    return found;
+  }
+
+  /**
+   * Scan exhaustif de window (+ unsafeWindow) pour trouver des villes.
+   * Dernière option si tous les chemins connus échouent.
+   * @returns {object[]}
+   */
+  function findTownsAnywhere() {
+    const result = [];
+    const seen   = new WeakSet();
+
+    // 1. Namespaces Grepolis connus en priorité
+    for (const ns of ['MM', 'Game', 'GameData', 'GrepolisGame', 'isMobile', 'Backbone']) {
+      try {
+        const obj = _uw[ns];
+        if (!obj) continue;
+        const towns = deepScanForTowns(obj, 4, seen);
+        if (towns.length > 0) return towns;
+      } catch { /* skip */ }
+    }
+
+    // 2. Scan de TOUS les globals (lent mais exhaustif)
+    try {
+      for (const key of Object.keys(_uw)) {
+        if (/^(jQuery|_|\$|React|angular|google|webkit|chrome|FB|__)/i.test(key)) continue;
+        try {
+          const val = _uw[key];
+          if (!val || typeof val !== 'object') continue;
+          const towns = deepScanForTowns(val, 3, seen);
+          if (towns.length > 0) return towns;
+        } catch { /* skip */ }
+      }
+    } catch { /* skip */ }
+
+    return result;
+  }
+
+  /**
+   * Extrait le town_id depuis le DOM (dropdown villes, data-attributes, URL).
+   * @returns {string|null}
+   */
+  function getTownIdFromDOM() {
+    try {
+      // Selector dropdown de ville
+      const sel = document.querySelector('select[name="town"], #town_select, .town_name_selector');
+      if (sel && sel.value) return String(sel.value);
+
+      // data-town-id sur un élément racine
+      const el = document.querySelector('[data-town-id], [data-city-id], [data-village-id]');
+      if (el) return el.dataset.townId ?? el.dataset.cityId ?? el.dataset.villageId ?? null;
+
+      // Game.townId via unsafeWindow
+      const tid = _uw.Game && _uw.Game.townId;
+      if (tid) return String(tid);
+    } catch { /* skip */ }
+    return null;
+  }
+
   // ─── XHR Interceptor — capture les données de ville depuis les réponses AJAX ──
 
   /**
@@ -904,16 +1071,18 @@
    */
   function installXHRHook() {
     try {
-      // ── Hook XMLHttpRequest ────────────────────────────────────────────────
-      const _origOpen = XMLHttpRequest.prototype.open;
-      const _origSend = XMLHttpRequest.prototype.send;
+      // On utilise _uw (unsafeWindow) pour hooker le vrai XHR de la page,
+      // pas celui du sandbox Tampermonkey.
+      const XHRProto = _uw.XMLHttpRequest.prototype;
+      const _origOpen = XHRProto.open;
+      const _origSend = XHRProto.send;
 
-      XMLHttpRequest.prototype.open = function (method, url, ...args) {
+      XHRProto.open = function (method, url, ...args) {
         this._hermesUrl = String(url ?? '');
         return _origOpen.call(this, method, url, ...args);
       };
 
-      XMLHttpRequest.prototype.send = function (...args) {
+      XHRProto.send = function (...args) {
         this.addEventListener('load', function () {
           try {
             if (!this.responseText || this.responseText.length > 2_000_000) return;
@@ -928,10 +1097,10 @@
         return _origSend.call(this, ...args);
       };
 
-      // ── Hook fetch ─────────────────────────────────────────────────────────
-      if (typeof window.fetch === 'function') {
-        const _origFetch = window.fetch.bind(window);
-        window.fetch = async function (...args) {
+      // ── Hook fetch (via unsafeWindow) ──────────────────────────────────────
+      if (typeof _uw.fetch === 'function') {
+        const _origFetch = _uw.fetch.bind(_uw);
+        _uw.fetch = async function (...args) {
           const response = await _origFetch(...args);
           try {
             const clone = response.clone();
@@ -1036,82 +1205,64 @@
      */
     getCities() {
       try {
-        // Tentative 1 : collection Backbone (MM.models.town_list, etc.)
+        // ── 1. Backbone collection via chemins connus ────────────────────────
         const townList = resolveFirst(PATHS.townList);
         if (townList) {
           const models = townList.models ?? (Array.isArray(townList) ? townList : []);
           if (models.length > 0) {
-            const cities = models.map(parseTownModel).filter(Boolean);
+            // Essayer Backbone models d'abord, puis plain data
+            let cities = models.map(parseTownModel).filter(Boolean);
+            if (cities.length === 0) cities = models.map(parsePlainTownData).filter(Boolean);
             if (cities.length > 0) return cities;
           }
-          // townList existe mais .models est vide — essayer comme plain object
-          if (!Array.isArray(townList) && typeof townList === 'object' && !townList.models) {
+          // townList sans .models → essayer comme map plain
+          if (!Array.isArray(townList) && !townList.models) {
             const vals = Object.values(townList).filter((v) => v && typeof v === 'object');
-            if (vals.length > 0) {
-              const cities = vals.map(parsePlainTownData).filter(Boolean);
-              if (cities.length > 0) return cities;
-            }
-          }
-        }
-
-        // Tentative 2 : window.Game.village_data (plain object — très fiable)
-        const villageData = safeGet(window, 'Game.village_data');
-        if (villageData && typeof villageData === 'object') {
-          const entries = Object.values(villageData);
-          if (entries.length > 0) {
-            const cities = entries.map(parsePlainTownData).filter(Boolean);
-            if (cities.length > 0) {
-              hermes.log.debug(`getCities: ${cities.length} villes via Game.village_data`);
-              return cities;
-            }
-          }
-        }
-
-        // Tentative 3 : window.Game.player (objet joueur avec ses villes)
-        const playerTowns = safeGet(window, 'Game.player.towns')
-          ?? safeGet(window, 'Game.player_data.towns');
-        if (playerTowns && typeof playerTowns === 'object') {
-          const entries = Array.isArray(playerTowns)
-            ? playerTowns
-            : Object.values(playerTowns);
-          if (entries.length > 0) {
-            const cities = entries.map(parsePlainTownData).filter(Boolean);
+            const cities = vals.map(parsePlainTownData).filter(Boolean);
             if (cities.length > 0) return cities;
           }
         }
 
-        // Tentative 4 : Game.townId — au moins récupérer la ville courante
-        const currentTownId = safeGet(window, 'Game.townId');
-        if (currentTownId) {
-          // Chercher dans town_list par ID
-          const townList2 = resolveFirst(PATHS.townList);
-          if (townList2 && typeof townList2.get === 'function') {
-            const model = townList2.get(currentTownId);
-            if (model) {
-              const city = parseTownModel(model);
-              if (city) return [city];
-            }
+        // ── 2. Game.village_data / player.towns (plain objects) ─────────────
+        for (const path of ['Game.village_data','Game.player.towns','Game.player_data.towns']) {
+          const data = safeGet(_uw, path);
+          if (data && typeof data === 'object') {
+            const entries = Array.isArray(data) ? data : Object.values(data);
+            const cities  = entries.map(parsePlainTownData).filter(Boolean);
+            if (cities.length > 0) return cities;
           }
-          // Dernier recours : ville minimale avec juste l'ID
-          hermes.log.warn(`getCities: fallback Game.townId=${currentTownId} — données limitées`);
-          return [{ id: currentTownId, name: `Ville ${currentTownId}`, x: 0, y: 0,
+        }
+
+        // ── 3. Cache XHR ──────────────────────────────────────────────────────
+        if (_townCache.size > 0) {
+          const cities = Array.from(_townCache.values()).map(parsePlainTownData).filter(Boolean);
+          if (cities.length > 0) {
+            hermes.log.debug(`getCities: ${cities.length} villes via XHR cache`);
+            return cities;
+          }
+        }
+
+        // ── 4. Scan exhaustif de window — dernière chance ─────────────────────
+        const scanned = findTownsAnywhere();
+        if (scanned.length > 0) {
+          const cities = scanned.map(parsePlainTownData).filter(Boolean);
+          if (cities.length > 0) {
+            hermes.log.info(`getCities: ${cities.length} villes via scan global`);
+            return cities;
+          }
+        }
+
+        // ── 5. Fallback DOM : au moins récupérer la ville courante ────────────
+        const domTownId = getTownIdFromDOM();
+        if (domTownId) {
+          hermes.log.warn(`getCities: fallback DOM townId=${domTownId}`);
+          return [{ id: domTownId, name: `Ville ${domTownId}`, x: 0, y: 0,
                     resources: { wood: 0, stone: 0, silver: 0 },
                     buildings: {}, queue: [], population: { current: 0, max: 0 },
                     specialization: null }];
         }
 
-        // Tentative 5 : cache XHR — données capturées depuis les réponses AJAX Grepolis
-        if (_townCache.size > 0) {
-          const cities = Array.from(_townCache.values())
-            .map(parsePlainTownData)
-            .filter(Boolean);
-          if (cities.length > 0) {
-            hermes.log.debug(`getCities: ${cities.length} villes via cache XHR`);
-            return cities;
-          }
-        }
-
-        hermes.log.warn('getCities: aucune source trouvée — attente des réponses AJAX…');
+        hermes.log.warn('getCities: aucune ville trouvée — le jeu est-il complètement chargé ?');
         return [];
       } catch (err) {
         hermes.log.error('getCities failed', err);
