@@ -1,0 +1,13 @@
+{
+  "name": "hermes-grepolis",
+  "version": "1.0.0",
+  "description": "Hermes — Intelligent Grepolis Assistant",
+  "scripts": {
+    "build": "rollup -c rollup.config.js",
+    "dev": "rollup -c rollup.config.js --watch"
+  },
+  "devDependencies": {
+    "rollup": "^4.0.0",
+    "@rollup/plugin-terser": "^0.4.4"
+  }
+}

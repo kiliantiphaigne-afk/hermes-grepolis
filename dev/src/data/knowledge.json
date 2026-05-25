@@ -1,0 +1,1778 @@
+{
+  "version": "1.0.0",
+  "generated": "2026-05-24",
+  "units": {
+    "land": {
+      "slinger": {
+        "cost": {
+          "wood": 55,
+          "stone": 100,
+          "silver": 40
+        },
+        "attack": 23,
+        "defense_blunt": 7,
+        "defense_sharp": 8,
+        "defense_distance": 2,
+        "speed": 14,
+        "pop": 1,
+        "train_time_base": 1144,
+        "booty": 8,
+        "role": "offense_ranged",
+        "attack_type": "distance",
+        "notes": "Meilleure unité offensive terrestre par population (AA/F=23). Idéale pour les nukes. Faible défense.",
+        "requires_building": "barracks",
+        "requires_research": "Slingers"
+      },
+      "hoplite": {
+        "cost": {
+          "wood": 0,
+          "stone": 75,
+          "silver": 150
+        },
+        "attack": 16,
+        "defense_blunt": 18,
+        "defense_sharp": 12,
+        "defense_distance": 7,
+        "speed": 6,
+        "pop": 1,
+        "train_time_base": 1316,
+        "booty": 24,
+        "role": "all_around",
+        "attack_type": "sharp",
+        "notes": "Unité polyvalente. Bonne défense équilibrée. Bonne en attaque et défense. Aucun coût en bois.",
+        "requires_building": "barracks",
+        "requires_research": "Hoplites"
+      },
+      "sword": {
+        "cost": {
+          "wood": 95,
+          "stone": 0,
+          "silver": 85
+        },
+        "attack": 5,
+        "defense_blunt": 14,
+        "defense_sharp": 8,
+        "defense_distance": 30,
+        "speed": 8,
+        "pop": 1,
+        "train_time_base": 1080,
+        "booty": 16,
+        "role": "defense_distance",
+        "attack_type": "blunt",
+        "notes": "Meilleure défense distance (ranged) du jeu. À ne jamais utiliser en attaque (attaque de 5). Défense indispensable contre slingers et archers.",
+        "requires_building": "barracks",
+        "requires_research": null
+      },
+      "horseman": {
+        "cost": {
+          "wood": 240,
+          "stone": 120,
+          "silver": 360
+        },
+        "attack": 60,
+        "defense_blunt": 18,
+        "defense_sharp": 1,
+        "defense_distance": 24,
+        "speed": 22,
+        "pop": 3,
+        "train_time_base": 3835,
+        "booty": 72,
+        "role": "offense_fast",
+        "attack_type": "blunt",
+        "notes": "Unité rapide avec forte attaque (AA/F=20). Grande capacité de pillage. Très cher (argent). Faible défense contre tranchant. Contre les swordsmen adverses.",
+        "requires_building": "stable",
+        "requires_research": "Horsemen"
+      },
+      "archer": {
+        "cost": {
+          "wood": 120,
+          "stone": 0,
+          "silver": 75
+        },
+        "attack": 8,
+        "defense_blunt": 7,
+        "defense_sharp": 25,
+        "defense_distance": 13,
+        "speed": 12,
+        "pop": 1,
+        "train_time_base": 1087,
+        "booty": 24,
+        "role": "defense_sharp",
+        "attack_type": "distance",
+        "notes": "Très forte défense contre tranchant (25). Bonne défense distance (13). Faible en attaque. Contre hoplites et cavalerie adverse.",
+        "requires_building": "barracks",
+        "requires_research": "Archers"
+      },
+      "catapult": {
+        "cost": {
+          "wood": 700,
+          "stone": 700,
+          "silver": 700
+        },
+        "attack": 100,
+        "defense_blunt": 30,
+        "defense_sharp": 30,
+        "defense_distance": 30,
+        "speed": 2,
+        "pop": 15,
+        "train_time_base": null,
+        "booty": 400,
+        "role": "siege",
+        "attack_type": "blunt",
+        "notes": "Détruit les murs et bâtiments adverses. Très lente et coûteuse. Utilisée pour diminuer le bonus mural avant/pendant une conquête. Requiert recherche 'Catapults'.",
+        "requires_building": "barracks",
+        "requires_research": "Catapults"
+      },
+      "godsent": {
+        "cost": {
+          "wood": 0,
+          "stone": 0,
+          "silver": 0
+        },
+        "attack": 0,
+        "defense_blunt": 0,
+        "defense_sharp": 0,
+        "defense_distance": 0,
+        "speed": 1,
+        "pop": 0,
+        "train_time_base": 0,
+        "role": "special",
+        "notes": "Unités envoyées par les dieux. Stats variables selon le pouvoir divin (Pest, Tremblement de terre, etc.). Pas recrutables.",
+        "requires_building": "temple",
+        "requires_research": null
+      }
+    },
+    "naval": {
+      "bireme": {
+        "cost": {
+          "wood": 800,
+          "stone": 700,
+          "silver": 180
+        },
+        "attack_naval": 24,
+        "defense_naval": 160,
+        "speed": 15,
+        "pop": 8,
+        "transport_capacity": 0,
+        "role": "naval_defense",
+        "notes": "Meilleure défense navale par population (Def/pop=20). Indispensable pour escorter CS et bloquer attaques. Faible en attaque navale.",
+        "requires_building": "harbor",
+        "requires_research": "Bireme"
+      },
+      "trireme": {
+        "cost": {
+          "wood": 2000,
+          "stone": 1300,
+          "silver": 1300
+        },
+        "attack_naval": 250,
+        "defense_naval": 250,
+        "speed": 15,
+        "pop": 16,
+        "transport_capacity": 0,
+        "role": "naval_allround",
+        "notes": "Navire de guerre polyvalent. Forte attaque et défense navale. Plus cher mais efficace. Requiert Academy 25.",
+        "requires_building": "harbor",
+        "requires_research": "Triremes"
+      },
+      "colony_ship": {
+        "cost": {
+          "wood": 10000,
+          "stone": 10000,
+          "silver": 10000
+        },
+        "attack_naval": 0,
+        "defense_naval": 0,
+        "speed": 3,
+        "pop": 170,
+        "transport_capacity": 0,
+        "role": "colonization",
+        "notes": "LE navire le plus important du jeu. Nécessaire pour fonder une nouvelle ville. Un seul CS peut être en transit à la fois. Requiert Harbor 20 + Academy 13.",
+        "requires_building": "harbor",
+        "requires_building_level": 20,
+        "requires_research": "Colony Ship"
+      },
+      "transport": {
+        "cost": {
+          "wood": 500,
+          "stone": 500,
+          "silver": 400
+        },
+        "attack_naval": 0,
+        "defense_naval": 0,
+        "speed": 8,
+        "pop": 7,
+        "transport_capacity_pop": 20,
+        "role": "transport",
+        "notes": "Transporte les troupes terrestres (20 pop par bateau). Aucune valeur défensive. Doit être escorté par des navires de combat.",
+        "requires_building": "harbor",
+        "requires_research": null
+      },
+      "fire_ship": {
+        "cost": {
+          "wood": 500,
+          "stone": 750,
+          "silver": 150
+        },
+        "attack_naval": 0,
+        "defense_naval": 0,
+        "speed": 5,
+        "pop": 8,
+        "role": "naval_last_defense",
+        "notes": "Défense navale de dernier recours. Chaque fire ship détruit 1 navire ennemi puis se sacrifie. N'attaque PAS les CS ni les transports. Très situationnel.",
+        "requires_building": "harbor",
+        "requires_research": "Fire Ships",
+        "special": "kamikaze_one_for_one"
+      },
+      "attack_ship": {
+        "cost": {
+          "wood": 1300,
+          "stone": 300,
+          "silver": 800
+        },
+        "attack_naval": 200,
+        "defense_naval": 60,
+        "speed": 13,
+        "pop": 10,
+        "role": "naval_offense",
+        "notes": "Navire offensif principal. Excellent rapport attaque/pop (20). Aussi appelé 'Light Ship'. Toujours escorter les transports avec ces navires.",
+        "requires_building": "harbor",
+        "requires_research": "Light Ships"
+      }
+    },
+    "mythical": {
+      "pegasus": {
+        "cost": {
+          "wood": 0,
+          "stone": 0,
+          "silver": 0
+        },
+        "cost_favor": 75,
+        "attack": 18,
+        "defense_blunt": 12,
+        "defense_sharp": 12,
+        "defense_distance": 12,
+        "speed": 180,
+        "pop": 4,
+        "role": "scout_fast",
+        "god": "athena",
+        "notes": "Unité la plus rapide du jeu (speed 180). Idéale pour espionner ou envoyer des renforts urgents. Requiert Athéna.",
+        "requires_building": "temple"
+      },
+      "cerberus": {
+        "cost": {
+          "wood": 0,
+          "stone": 0,
+          "silver": 0
+        },
+        "cost_favor": 100,
+        "attack": 60,
+        "defense_blunt": 100,
+        "defense_sharp": 40,
+        "defense_distance": 40,
+        "speed": 28,
+        "pop": 5,
+        "role": "defense_strong",
+        "god": "hades",
+        "notes": "Défense massive contre contondant (100). Excellent contre cavalerie. Requiert Hadès.",
+        "requires_building": "temple"
+      },
+      "manticore": {
+        "cost": {
+          "wood": 0,
+          "stone": 0,
+          "silver": 0
+        },
+        "cost_favor": 200,
+        "attack": 200,
+        "defense_blunt": 10,
+        "defense_sharp": 10,
+        "defense_distance": 10,
+        "speed": 50,
+        "pop": 10,
+        "role": "offense_elite",
+        "god": "zeus",
+        "notes": "Unité mythique offensive majeure. Requiert Zeus.",
+        "requires_building": "temple"
+      },
+      "hydra": {
+        "cost": {
+          "wood": 0,
+          "stone": 0,
+          "silver": 0
+        },
+        "cost_favor": 175,
+        "attack_naval": 100,
+        "defense_naval": 350,
+        "speed": 40,
+        "pop": 15,
+        "role": "naval_mythical",
+        "god": "poseidon",
+        "notes": "Défense navale exceptionnelle (350). Essentielle pour villes portuaires défensives. Requiert Poséidon.",
+        "requires_building": "temple"
+      },
+      "cyclops": {
+        "cost": {
+          "wood": 0,
+          "stone": 0,
+          "silver": 0
+        },
+        "cost_favor": 250,
+        "attack": 280,
+        "defense_blunt": 28,
+        "defense_sharp": 28,
+        "defense_distance": 28,
+        "speed": 20,
+        "pop": 20,
+        "role": "siege_mythical",
+        "god": "poseidon",
+        "notes": "Attaque les bâtiments comme la catapulte mais beaucoup plus puissant. Requiert Poséidon.",
+        "requires_building": "temple"
+      },
+      "harpy": {
+        "cost": {
+          "wood": 0,
+          "stone": 0,
+          "silver": 0
+        },
+        "cost_favor": 120,
+        "attack": 36,
+        "defense_blunt": 36,
+        "defense_sharp": 36,
+        "defense_distance": 36,
+        "speed": 120,
+        "pop": 5,
+        "role": "fast_attack",
+        "god": "hera",
+        "notes": "Très rapide, statistiques équilibrées. Attaque/défense polyvalente. Requiert Héra.",
+        "requires_building": "temple"
+      }
+    }
+  },
+  "buildings": {
+    "senate": {
+      "max_level": 30,
+      "description": "Bâtiment principal. Nécessaire pour tout débloquer. Réduit le temps de construction de tous les bâtiments.",
+      "required_by": [
+        "all"
+      ],
+      "levels": {
+        "1": {
+          "cost": {
+            "wood": 60,
+            "stone": 100,
+            "silver": 40
+          },
+          "build_time": 400,
+          "effect": "Débloque la ville et les fonctions de base"
+        },
+        "5": {
+          "cost": {
+            "wood": 250,
+            "stone": 400,
+            "silver": 160
+          },
+          "build_time": 2800,
+          "effect": "Accélère la construction, débloque niveaux 5"
+        },
+        "10": {
+          "cost": {
+            "wood": 850,
+            "stone": 1400,
+            "silver": 560
+          },
+          "build_time": 9600,
+          "effect": "Accélère construction, débloque niveaux 10"
+        },
+        "15": {
+          "cost": {
+            "wood": 2500,
+            "stone": 4200,
+            "silver": 1680
+          },
+          "build_time": 28800,
+          "effect": "Débloque niveaux 15"
+        },
+        "20": {
+          "cost": {
+            "wood": 7000,
+            "stone": 11500,
+            "silver": 4600
+          },
+          "build_time": 72000,
+          "effect": "Débloque niveaux 20"
+        },
+        "25": {
+          "cost": {
+            "wood": 18000,
+            "stone": 30000,
+            "silver": 12000
+          },
+          "build_time": 180000,
+          "effect": "Débloque niveaux 25"
+        },
+        "30": {
+          "cost": {
+            "wood": 45000,
+            "stone": 75000,
+            "silver": 30000
+          },
+          "build_time": 432000,
+          "effect": "Construction maximale"
+        }
+      }
+    },
+    "barracks": {
+      "max_level": 30,
+      "description": "Caserne d'entraînement des unités terrestres. Réduit le temps d'entraînement et débloque des unités supérieures.",
+      "required_by": [
+        "slinger",
+        "hoplite",
+        "sword",
+        "archer",
+        "catapult"
+      ],
+      "levels": {
+        "1": {
+          "cost": {
+            "wood": 180,
+            "stone": 270,
+            "silver": 90
+          },
+          "build_time": 900,
+          "effect": "Entraînement terrestre de base"
+        },
+        "5": {
+          "cost": {
+            "wood": 700,
+            "stone": 1050,
+            "silver": 350
+          },
+          "build_time": 5400,
+          "effect": "Réduction temps formation"
+        },
+        "10": {
+          "cost": {
+            "wood": 2000,
+            "stone": 3000,
+            "silver": 1000
+          },
+          "build_time": 18000,
+          "effect": "Réduction -25% cumulée"
+        },
+        "12": {
+          "cost": {
+            "wood": 2800,
+            "stone": 4200,
+            "silver": 1400
+          },
+          "build_time": 25200,
+          "effect": "Requis pour horsemen (avec research)"
+        },
+        "15": {
+          "cost": {
+            "wood": 5000,
+            "stone": 7500,
+            "silver": 2500
+          },
+          "build_time": 46800,
+          "effect": "Réduction -40% cumulée"
+        },
+        "20": {
+          "cost": {
+            "wood": 12000,
+            "stone": 18000,
+            "silver": 6000
+          },
+          "build_time": 108000,
+          "effect": "Réduction -55% cumulée"
+        },
+        "25": {
+          "cost": {
+            "wood": 28000,
+            "stone": 42000,
+            "silver": 14000
+          },
+          "build_time": 216000,
+          "effect": "Réduction -65% cumulée"
+        },
+        "30": {
+          "cost": {
+            "wood": 65000,
+            "stone": 97000,
+            "silver": 32000
+          },
+          "build_time": 540000,
+          "effect": "Formation minimale — catapulte (research lv19)"
+        }
+      }
+    },
+    "stable": {
+      "max_level": 10,
+      "description": "Écuries pour la formation des cavaliers. Niveau maximum 10.",
+      "required_by": [
+        "horseman"
+      ],
+      "levels": {
+        "1": {
+          "cost": {
+            "wood": 450,
+            "stone": 600,
+            "silver": 250
+          },
+          "build_time": 3600,
+          "effect": "Débloque cavaliers (avec research Academy lv10)"
+        },
+        "5": {
+          "cost": {
+            "wood": 2200,
+            "stone": 2900,
+            "silver": 1200
+          },
+          "build_time": 21600,
+          "effect": "Formation horsemen -30%"
+        },
+        "10": {
+          "cost": {
+            "wood": 8000,
+            "stone": 10600,
+            "silver": 4400
+          },
+          "build_time": 86400,
+          "effect": "Formation horsemen maximale (-50%)"
+        }
+      }
+    },
+    "harbor": {
+      "max_level": 30,
+      "description": "Port permettant la construction de navires. OBJECTIF CLÉ: Harbor 20 débloque le Colony Ship.",
+      "required_by": [
+        "bireme",
+        "trireme",
+        "colony_ship",
+        "transport",
+        "fire_ship",
+        "attack_ship"
+      ],
+      "levels": {
+        "1": {
+          "cost": {
+            "wood": 300,
+            "stone": 450,
+            "silver": 150
+          },
+          "build_time": 2400,
+          "effect": "Débloque biremes et transports"
+        },
+        "5": {
+          "cost": {
+            "wood": 1200,
+            "stone": 1800,
+            "silver": 600
+          },
+          "build_time": 12000,
+          "effect": "Formation navale -15%"
+        },
+        "10": {
+          "cost": {
+            "wood": 3500,
+            "stone": 5200,
+            "silver": 1750
+          },
+          "build_time": 36000,
+          "effect": "Débloque fire ships (avec research lv19); formation -30%"
+        },
+        "15": {
+          "cost": {
+            "wood": 9000,
+            "stone": 13500,
+            "silver": 4500
+          },
+          "build_time": 90000,
+          "effect": "Débloque light ships (avec research lv16); formation -45%"
+        },
+        "20": {
+          "cost": {
+            "wood": 22000,
+            "stone": 33000,
+            "silver": 11000
+          },
+          "build_time": 216000,
+          "effect": "ÉTAPE CLÉ — Débloque Colony Ship; formation -55%"
+        },
+        "25": {
+          "cost": {
+            "wood": 52000,
+            "stone": 78000,
+            "silver": 26000
+          },
+          "build_time": 504000,
+          "effect": "Débloque triremes (research lv25); formation -65%"
+        },
+        "30": {
+          "cost": {
+            "wood": 120000,
+            "stone": 180000,
+            "silver": 60000
+          },
+          "build_time": 1080000,
+          "effect": "Formation navale maximale (-75%)"
+        }
+      }
+    },
+    "warehouse": {
+      "max_level": 30,
+      "description": "Augmente la capacité de stockage des ressources. Indispensable pour accumuler les 30 000 de chaque ressource pour le CS.",
+      "required_by": [],
+      "levels": {
+        "1": {
+          "cost": {
+            "wood": 100,
+            "stone": 150,
+            "silver": 50
+          },
+          "build_time": 700,
+          "effect": "Stockage: ~1 000 par ressource"
+        },
+        "5": {
+          "cost": {
+            "wood": 400,
+            "stone": 600,
+            "silver": 200
+          },
+          "build_time": 4000,
+          "effect": "Stockage: ~3 500"
+        },
+        "10": {
+          "cost": {
+            "wood": 1200,
+            "stone": 1800,
+            "silver": 600
+          },
+          "build_time": 14400,
+          "effect": "Stockage: ~8 000"
+        },
+        "15": {
+          "cost": {
+            "wood": 3200,
+            "stone": 4800,
+            "silver": 1600
+          },
+          "build_time": 43200,
+          "effect": "Stockage: ~18 000"
+        },
+        "20": {
+          "cost": {
+            "wood": 8500,
+            "stone": 12750,
+            "silver": 4250
+          },
+          "build_time": 115200,
+          "effect": "Stockage: ~40 000"
+        },
+        "25": {
+          "cost": {
+            "wood": 22000,
+            "stone": 33000,
+            "silver": 11000
+          },
+          "build_time": 288000,
+          "effect": "Stockage: ~90 000"
+        },
+        "30": {
+          "cost": {
+            "wood": 55000,
+            "stone": 82500,
+            "silver": 27500
+          },
+          "build_time": 648000,
+          "effect": "Stockage maximal: ~200 000"
+        }
+      }
+    },
+    "farm": {
+      "max_level": 45,
+      "description": "Augmente la population maximale de la ville, permettant d'entraîner plus de troupes.",
+      "required_by": [],
+      "levels": {
+        "1": {
+          "cost": {
+            "wood": 80,
+            "stone": 0,
+            "silver": 0
+          },
+          "build_time": 600,
+          "effect": "Pop max: 500"
+        },
+        "5": {
+          "cost": {
+            "wood": 250,
+            "stone": 0,
+            "silver": 0
+          },
+          "build_time": 3000,
+          "effect": "Pop max: ~700"
+        },
+        "10": {
+          "cost": {
+            "wood": 700,
+            "stone": 0,
+            "silver": 0
+          },
+          "build_time": 9000,
+          "effect": "Pop max: ~1 200"
+        },
+        "15": {
+          "cost": {
+            "wood": 1800,
+            "stone": 0,
+            "silver": 0
+          },
+          "build_time": 25000,
+          "effect": "Pop max: ~1 800"
+        },
+        "20": {
+          "cost": {
+            "wood": 4500,
+            "stone": 0,
+            "silver": 0
+          },
+          "build_time": 63000,
+          "effect": "Pop max: ~2 600"
+        },
+        "25": {
+          "cost": {
+            "wood": 11000,
+            "stone": 0,
+            "silver": 0
+          },
+          "build_time": 153000,
+          "effect": "Pop max: ~3 500"
+        },
+        "30": {
+          "cost": {
+            "wood": 26000,
+            "stone": 0,
+            "silver": 0
+          },
+          "build_time": 360000,
+          "effect": "Pop max: ~4 700"
+        },
+        "35": {
+          "cost": {
+            "wood": 60000,
+            "stone": 0,
+            "silver": 0
+          },
+          "build_time": 810000,
+          "effect": "Pop max: ~6 000"
+        },
+        "40": {
+          "cost": {
+            "wood": 130000,
+            "stone": 0,
+            "silver": 0
+          },
+          "build_time": 1620000,
+          "effect": "Pop max: ~7 500"
+        },
+        "45": {
+          "cost": {
+            "wood": 260000,
+            "stone": 0,
+            "silver": 0
+          },
+          "build_time": 3240000,
+          "effect": "Pop max maximale: ~9 000"
+        }
+      }
+    },
+    "market": {
+      "max_level": 30,
+      "description": "Permet le commerce avec les villages fermiers et les joueurs. Augmente la capacité de transport de ressources.",
+      "required_by": [],
+      "levels": {
+        "1": {
+          "cost": {
+            "wood": 200,
+            "stone": 300,
+            "silver": 100
+          },
+          "build_time": 1800,
+          "effect": "Débloque commerce. Capacité: 500/heure"
+        },
+        "5": {
+          "cost": {
+            "wood": 800,
+            "stone": 1200,
+            "silver": 400
+          },
+          "build_time": 9600,
+          "effect": "Capacité: ~2 000/heure"
+        },
+        "10": {
+          "cost": {
+            "wood": 2400,
+            "stone": 3600,
+            "silver": 1200
+          },
+          "build_time": 32400,
+          "effect": "Capacité: ~5 000/heure"
+        },
+        "15": {
+          "cost": {
+            "wood": 6500,
+            "stone": 9750,
+            "silver": 3250
+          },
+          "build_time": 86400,
+          "effect": "Capacité: ~12 000/heure"
+        },
+        "20": {
+          "cost": {
+            "wood": 17000,
+            "stone": 25500,
+            "silver": 8500
+          },
+          "build_time": 216000,
+          "effect": "Capacité: ~28 000/heure"
+        },
+        "25": {
+          "cost": {
+            "wood": 43000,
+            "stone": 64500,
+            "silver": 21500
+          },
+          "build_time": 504000,
+          "effect": "Capacité: ~60 000/heure"
+        },
+        "30": {
+          "cost": {
+            "wood": 105000,
+            "stone": 157500,
+            "silver": 52500
+          },
+          "build_time": 1080000,
+          "effect": "Capacité de trade maximale"
+        }
+      }
+    },
+    "wall": {
+      "max_level": 25,
+      "description": "Augmente le bonus défensif de toutes les troupes dans la ville (+6% par niveau). Priorité absolue pour une ville défensive.",
+      "required_by": [],
+      "levels": {
+        "1": {
+          "cost": {
+            "wood": 180,
+            "stone": 240,
+            "silver": 0
+          },
+          "build_time": 1800,
+          "effect": "+6% défense totale"
+        },
+        "5": {
+          "cost": {
+            "wood": 700,
+            "stone": 930,
+            "silver": 0
+          },
+          "build_time": 9600,
+          "effect": "+30% défense"
+        },
+        "10": {
+          "cost": {
+            "wood": 2000,
+            "stone": 2650,
+            "silver": 0
+          },
+          "build_time": 32400,
+          "effect": "+60% défense"
+        },
+        "15": {
+          "cost": {
+            "wood": 5500,
+            "stone": 7300,
+            "silver": 0
+          },
+          "build_time": 86400,
+          "effect": "+90% défense"
+        },
+        "20": {
+          "cost": {
+            "wood": 14000,
+            "stone": 18600,
+            "silver": 0
+          },
+          "build_time": 216000,
+          "effect": "+120% défense"
+        },
+        "25": {
+          "cost": {
+            "wood": 35000,
+            "stone": 46500,
+            "silver": 0
+          },
+          "build_time": 504000,
+          "effect": "+150% défense (maximum)"
+        }
+      }
+    },
+    "cave": {
+      "max_level": 10,
+      "description": "Protège une partie de l'argent contre le pillage. Chaque niveau protège davantage d'argent.",
+      "required_by": [],
+      "levels": {
+        "1": {
+          "cost": {
+            "wood": 350,
+            "stone": 800,
+            "silver": 250
+          },
+          "build_time": 5400,
+          "effect": "Protège 100 argent"
+        },
+        "5": {
+          "cost": {
+            "wood": 2500,
+            "stone": 5700,
+            "silver": 1800
+          },
+          "build_time": 36000,
+          "effect": "Protège ~2 000 argent"
+        },
+        "10": {
+          "cost": {
+            "wood": 12000,
+            "stone": 27500,
+            "silver": 8700
+          },
+          "build_time": 180000,
+          "effect": "Protège ~30 000 argent (maximum)"
+        }
+      }
+    },
+    "academy": {
+      "max_level": 36,
+      "description": "Permet la recherche de technologies améliorant les troupes. Nécessaire pour débloquer la plupart des unités avancées.",
+      "required_by": [
+        "bireme",
+        "trireme",
+        "colony_ship",
+        "fire_ship",
+        "attack_ship",
+        "horseman",
+        "slinger",
+        "hoplite",
+        "archer",
+        "catapult"
+      ],
+      "levels": {
+        "1": {
+          "cost": {
+            "wood": 400,
+            "stone": 600,
+            "silver": 200
+          },
+          "build_time": 7200,
+          "effect": "Débloque recherches de base (Biremes lv13, Colony Ship lv13)"
+        },
+        "5": {
+          "cost": {
+            "wood": 1600,
+            "stone": 2400,
+            "silver": 800
+          },
+          "build_time": 36000,
+          "effect": "Recherches avancées"
+        },
+        "10": {
+          "cost": {
+            "wood": 4500,
+            "stone": 6750,
+            "silver": 2250
+          },
+          "build_time": 108000,
+          "effect": "Horsemen research (lv10), Light Ships (lv16)"
+        },
+        "20": {
+          "cost": {
+            "wood": 28000,
+            "stone": 42000,
+            "silver": 14000
+          },
+          "build_time": 648000,
+          "effect": "Catapults (lv19), Fire Ships (lv19)"
+        },
+        "25": {
+          "cost": {
+            "wood": 60000,
+            "stone": 90000,
+            "silver": 30000
+          },
+          "build_time": 1296000,
+          "effect": "Triremes (lv25)"
+        },
+        "36": {
+          "cost": {
+            "wood": 200000,
+            "stone": 300000,
+            "silver": 100000
+          },
+          "build_time": 3600000,
+          "effect": "Toutes recherches débloquées"
+        }
+      }
+    },
+    "temple": {
+      "max_level": 1,
+      "description": "Permet de choisir un dieu tutélaire (Zeus, Poséidon, Héra, Athéna, Hadès, Artémis, Héphaïstos). Débloque unités mythiques et pouvoirs divins.",
+      "required_by": [
+        "pegasus",
+        "cerberus",
+        "manticore",
+        "hydra",
+        "cyclops",
+        "harpy"
+      ],
+      "levels": {
+        "1": {
+          "cost": {
+            "wood": 1000,
+            "stone": 1500,
+            "silver": 500
+          },
+          "build_time": 36000,
+          "effect": "Choisir un dieu, débloquer unités mythiques et pouvoirs divins"
+        }
+      }
+    }
+  },
+  "mechanics": {
+    "farming": {
+      "demand_cooldown_base": 300,
+      "mood_recovery_per_hour": 2.45,
+      "mood_recovery_per_day": 58.835,
+      "loot_mood_impact_per_1000": -10,
+      "demand_resources_base": 96,
+      "trade_ratio": 1.25,
+      "trade_mood_minimum": 80,
+      "revolt_threshold": 80,
+      "max_village_level": 10,
+      "notes": [
+        "Piller 1 000 ressources coûte ~10 points de moral au village",
+        "Le moral récupère naturellement ~2.45 points/heure",
+        "Le commerce (trade) requiert moral >= 80",
+        "Demander des ressources: pas de coût moral, cooldown 5 min (base)",
+        "Le niveau du village augmente sa production et son stockage max",
+        "À moral=0 le village se révolte et refuse tout jusqu'à récupération"
+      ]
+    },
+    "travel_time": {
+      "formula": "distance / (unit_speed * world_speed) * 60",
+      "formula_description": "Résultat en minutes",
+      "distance_formula": "sqrt((x2-x1)^2 + (y2-y1)^2)",
+      "notes": [
+        "world_speed: 1 sur monde normal, 2/3/4 sur mondes rapides",
+        "Les vitesses des unités sont données pour monde speed=1",
+        "Les transports voyagent à la vitesse de l'unité la plus lente embarquée",
+        "Le CS a une portée max de 48h de voyage (monde speed 1)",
+        "Exemple speed 3: Slinger speed=14*3=42, voyage 10 cases en ~14 min"
+      ]
+    },
+    "conquest": {
+      "revolt": {
+        "revolt_duration_hours": 12,
+        "cs_window_hours": 24,
+        "description": "Système Révolte: mettre une ville en révolte puis envoyer le CS dans la fenêtre de 24h après la fin de la révolte.",
+        "steps": [
+          "1. Attaquer la ville pour déclencher la révolte (1er tour: 12h)",
+          "2. La révolte se termine → la fenêtre de 24h s'ouvre",
+          "3. Envoyer le Colony Ship pour arriver dans cette fenêtre",
+          "4. Le CS doit survivre la traversée et atteindre la ville",
+          "5. Colonisation réussie → nouvelle ville gagnée"
+        ],
+        "tips": [
+          "Synchroniser l'attaque de révolte et l'arrivée du CS",
+          "Escorter le CS avec des biremes pour contrer les défenses navales",
+          "Casser le mur avec des catapultes avant la 2ème vague si ville fortifiée"
+        ]
+      },
+      "conquest": {
+        "cs_hold_hours": 8,
+        "description": "Système Conquête: le CS doit rester dans la ville 8h consécutives sans être chassé.",
+        "steps": [
+          "1. Envoyer le Colony Ship dans la ville cible",
+          "2. Le CS commence à décompter 8h",
+          "3. Si le CS est chassé, le décompte repart à 0",
+          "4. Après 8h ininterrompues → colonisation réussie"
+        ],
+        "tips": [
+          "Protéger le CS avec des renforts constants depuis des alliés",
+          "Attaquer les renforts ennemis en route pour libérer la ville",
+          "Coordonner l'alliance pour des attaques simultanées"
+        ]
+      }
+    },
+    "morale": {
+      "formula": "50 + 50 * sqrt(attacker_points / defender_points)",
+      "minimum": 30,
+      "maximum": 100,
+      "description": "Le moral réduit la force d'attaque contre les joueurs moins pointés. S'applique uniquement aux attaques.",
+      "examples": [
+        "Attaquant = défenseur en points → moral 100% (pas d'effet)",
+        "Attaquant 4x plus de points → moral 100% (plafonné)",
+        "Attaquant 1/4 des points → moral = 50 + 50*0.5 = 75%",
+        "Attaquant 1/100 des points → moral = 50 + 50*0.1 = 55%",
+        "Minimum absolu: 30% (même contre un joueur 1000x plus fort)"
+      ],
+      "strategic_note": "Le moral protège les petits joueurs des grands. En début de partie, farmer les villes NPC sans moral pénalité."
+    },
+    "resources": {
+      "production_passive": {
+        "wood": 30,
+        "stone": 30,
+        "silver": 20
+      },
+      "production_unit": "per_hour",
+      "world_speed_multiplier": true,
+      "main_sources": [
+        "Villages fermiers (farming) — source principale en early game",
+        "Commerce avec d'autres joueurs (market)",
+        "Pillage des villes adverses",
+        "Production passive de la ville (~30/30/20 par heure)"
+      ]
+    },
+    "battle_system": {
+      "attack_types": {
+        "blunt": "Armes contondantes — cavalerie (horseman), masses. Fort contre: hoplites en défense blunt. Faible contre: swordsmen.",
+        "sharp": "Armes tranchantes — hoplites. Fort contre: archers. Faible contre: archers (def_sharp élevée).",
+        "distance": "À distance — slingers (frondes), archers (arcs). Fort contre: swordsmen (def_distance élevée). Faible contre: swordsmen."
+      },
+      "defense_types": {
+        "defense_blunt": "Résiste aux attaques contondantes (cavalerie)",
+        "defense_sharp": "Résiste aux attaques tranchantes (hoplites)",
+        "defense_distance": "Résiste aux attaques à distance (slingers, archers)"
+      },
+      "formula": "Attaque totale type X vs somme des défenses type X des défenseurs. Pertes proportionnelles au rapport.",
+      "luck": {
+        "enabled": true,
+        "range_percent": 33,
+        "description": "Facteur chance ±33% appliqué au résultat final de combat"
+      },
+      "wall_bonus": {
+        "formula": "défense_totale * (1 + wall_level * 0.06)",
+        "description": "Chaque niveau de mur ajoute 6% de bonus défensif à TOUTES les troupes dans la ville",
+        "example": "Wall 25 = +150% défense → troupes défendent 2.5x plus fort"
+      },
+      "best_matchups": {
+        "slinger_vs": [
+          "hoplite (def_sharp=12 only)",
+          "other_slingers"
+        ],
+        "sword_vs": [
+          "slinger_attack",
+          "archer_attack"
+        ],
+        "horseman_vs": [
+          "sword_attack"
+        ],
+        "archer_vs": [
+          "hoplite_attack",
+          "horseman_attack"
+        ],
+        "bireme_vs": [
+          "transport",
+          "colony_ship"
+        ],
+        "attack_ship_vs": [
+          "bireme (in numbers)"
+        ]
+      }
+    }
+  },
+  "world_profiles": {
+    "speed1_revolt": {
+      "description": "Monde lent (x1), système révolte",
+      "world_speed": 1,
+      "conquest_system": "revolt",
+      "characteristics": [
+        "Croissance très lente — des semaines pour la première colonie",
+        "Temps de réaction élevé — plus de 12h avant une attaque",
+        "Défense prioritaire en early game",
+        "Communautés durables, grandes alliances stables"
+      ],
+      "play_style": "turtle_expand",
+      "colony_ship_time_hours_approx": 48,
+      "typical_first_colony_days": 30,
+      "notes": "Monde le plus classique. Idéal pour apprendre le jeu. Rejoindre une grande alliance est crucial."
+    },
+    "speed2_revolt": {
+      "description": "Monde rapide (x2), système révolte",
+      "world_speed": 2,
+      "conquest_system": "revolt",
+      "characteristics": [
+        "Rythme soutenu — première colonie en ~2 semaines",
+        "Attention constante requise (plusieurs fois par jour)",
+        "Réactivité plus importante que sur speed 1"
+      ],
+      "play_style": "balanced_active",
+      "colony_ship_time_hours_approx": 24,
+      "typical_first_colony_days": 15
+    },
+    "speed3_revolt": {
+      "description": "Monde très rapide (x3), système révolte",
+      "world_speed": 3,
+      "conquest_system": "revolt",
+      "characteristics": [
+        "Rythme intense — première colonie en ~10 jours",
+        "Colony Rush très efficace sur ce type de monde",
+        "Exige attention régulière (farming toutes les 5 min recommandé)",
+        "Combat rapproché, alliances dynamiques"
+      ],
+      "play_style": "aggressive_rush",
+      "colony_ship_time_hours_approx": 16,
+      "typical_first_colony_days": 10
+    },
+    "speed3_conquest": {
+      "description": "Monde très rapide (x3), système conquête",
+      "world_speed": 3,
+      "conquest_system": "conquest",
+      "characteristics": [
+        "Même rythme que speed3, conquête directe (sans double révolte)",
+        "Plus agressif — le CS doit tenir 8h dans la ville cible",
+        "Coordination d'alliance cruciale pour protéger le CS",
+        "Attaques pour chasser le CS plus fréquentes"
+      ],
+      "play_style": "aggressive_coordinated",
+      "colony_ship_time_hours_approx": 16,
+      "typical_first_colony_days": 10
+    },
+    "speed4_revolt": {
+      "description": "Monde ultra-rapide (x4), système révolte",
+      "world_speed": 4,
+      "conquest_system": "revolt",
+      "characteristics": [
+        "Rythme extrême — première colonie en ~7 jours",
+        "Très compétitif, erreurs immédiatement sanctionnées",
+        "Formation des troupes quasi instantanée",
+        "Idéal pour joueurs expérimentés avec temps disponible"
+      ],
+      "play_style": "hyperaggressive",
+      "colony_ship_time_hours_approx": 12,
+      "typical_first_colony_days": 7
+    }
+  },
+  "strategies": {
+    "colony_rush_speed3": {
+      "name": "Colony Rush Speed 3",
+      "applicable_worlds": [
+        "speed3_revolt",
+        "speed3_conquest"
+      ],
+      "city_specialization": "colony_rush",
+      "target_city_number": 1,
+      "description": "Stratégie pour obtenir la première colonie le plus vite possible sur un monde x3. Priorité absolue: Harbor 20 + Academy 13.",
+      "build_order": [
+        {
+          "building": "senate",
+          "target_level": 5,
+          "priority": 1,
+          "reason": "Débloque tout, accélère la construction"
+        },
+        {
+          "building": "warehouse",
+          "target_level": 10,
+          "priority": 2,
+          "reason": "Stocker les ressources pour construire Harbor"
+        },
+        {
+          "building": "harbor",
+          "target_level": 10,
+          "priority": 3,
+          "reason": "Ouvrir la voie vers Harbor 20"
+        },
+        {
+          "building": "farm",
+          "target_level": 8,
+          "priority": 4,
+          "reason": "Population pour troupes défensives initiales"
+        },
+        {
+          "building": "barracks",
+          "target_level": 5,
+          "priority": 5,
+          "reason": "Slingers pour défense minimale"
+        },
+        {
+          "building": "academy",
+          "target_level": 13,
+          "priority": 6,
+          "reason": "Débloque recherche Colony Ship — OBLIGATOIRE"
+        },
+        {
+          "building": "harbor",
+          "target_level": 20,
+          "priority": 7,
+          "reason": "CIBLE PRINCIPALE — débloque Colony Ship"
+        },
+        {
+          "building": "warehouse",
+          "target_level": 20,
+          "priority": 8,
+          "reason": "Stocker 10 000 de chaque ressource pour le CS"
+        },
+        {
+          "building": "farm",
+          "target_level": 15,
+          "priority": 9,
+          "reason": "Population pour biremes (8 pop each) + CS (170 pop)"
+        }
+      ],
+      "troop_targets": {
+        "slinger": 200,
+        "bireme": 20,
+        "colony_ship": 1
+      },
+      "estimated_time": "72h",
+      "resource_requirement_cs": {
+        "wood": 10000,
+        "stone": 10000,
+        "silver": 10000
+      },
+      "key_tips": [
+        "Harbor 20 + Academy 13 sont les deux prérequis du CS",
+        "Ne pas recruter des troupes offensives avant Harbor 10",
+        "Farmer les villages toutes les 5 minutes pour maximiser les ressources",
+        "Demander protection à l'alliance pour les 48 premières heures",
+        "Éviter toute guerre avant la première colonie",
+        "Le CS consomme 170 de population — préparer la farm en conséquence",
+        "Escorter le CS avec 15-20 biremes minimum pour la traversée navale"
+      ],
+      "risks": [
+        "Attaque précoce avant Harbor 20",
+        "Ressources insuffisantes (ne pas oublier warehouse)",
+        "Population insuffisante (farm trop basse pour 170 pop CS)",
+        "Academy 13 oublié — sans ça, impossible de rechercher Colony Ship"
+      ]
+    },
+    "colony_rush_speed1": {
+      "name": "Colony Rush Speed 1",
+      "applicable_worlds": [
+        "speed1_revolt"
+      ],
+      "city_specialization": "colony_rush",
+      "target_city_number": 1,
+      "description": "Variante lente du Colony Rush adaptée aux mondes x1. Patience et planification sur plusieurs semaines.",
+      "build_order": [
+        {
+          "building": "senate",
+          "target_level": 10,
+          "priority": 1,
+          "reason": "Accélérer la construction sur le long terme"
+        },
+        {
+          "building": "warehouse",
+          "target_level": 15,
+          "priority": 2,
+          "reason": "Grand stockage pour construction longue"
+        },
+        {
+          "building": "wall",
+          "target_level": 10,
+          "priority": 3,
+          "reason": "Défense tôt — les attaques sont fréquentes sur les mondes lents"
+        },
+        {
+          "building": "harbor",
+          "target_level": 20,
+          "priority": 4,
+          "reason": "Colony Ship — cible finale"
+        },
+        {
+          "building": "academy",
+          "target_level": 13,
+          "priority": 5,
+          "reason": "Research Colony Ship"
+        },
+        {
+          "building": "barracks",
+          "target_level": 12,
+          "priority": 6,
+          "reason": "Swordsmen pour défense solide"
+        },
+        {
+          "building": "farm",
+          "target_level": 20,
+          "priority": 7,
+          "reason": "Population pour armée complète + CS"
+        }
+      ],
+      "troop_targets": {
+        "sword": 200,
+        "slinger": 300,
+        "bireme": 40,
+        "colony_ship": 1
+      },
+      "estimated_time": "25-30 jours",
+      "key_tips": [
+        "Rejoindre une alliance dès les premières heures pour protection",
+        "Investir dans la muraille tôt — les attaques sont fréquentes",
+        "Farmer régulièrement (toutes les heures minimum)",
+        "Coordonner avec l'alliance pour le CS (timing et escorte)"
+      ]
+    },
+    "offense_speed3": {
+      "name": "Ville Offensive Speed 3",
+      "applicable_worlds": [
+        "speed3_revolt",
+        "speed3_conquest"
+      ],
+      "city_specialization": "offense",
+      "description": "Ville spécialisée dans l'attaque. Priorité aux unités offensives après la première colonie.",
+      "build_order": [
+        {
+          "building": "senate",
+          "target_level": 10,
+          "priority": 1
+        },
+        {
+          "building": "farm",
+          "target_level": 30,
+          "priority": 2,
+          "reason": "Maximiser la population pour troupes offensives"
+        },
+        {
+          "building": "barracks",
+          "target_level": 25,
+          "priority": 3,
+          "reason": "Slingers rapidement"
+        },
+        {
+          "building": "stable",
+          "target_level": 10,
+          "priority": 4,
+          "reason": "Horsemen pour nukes rapides"
+        },
+        {
+          "building": "harbor",
+          "target_level": 25,
+          "priority": 5,
+          "reason": "Light ships pour nukes navals"
+        },
+        {
+          "building": "warehouse",
+          "target_level": 25,
+          "priority": 6
+        },
+        {
+          "building": "academy",
+          "target_level": 20,
+          "priority": 7,
+          "reason": "Toutes technologies offensives"
+        }
+      ],
+      "troop_targets": {
+        "slinger": 800,
+        "horseman": 100,
+        "attack_ship": 50,
+        "bireme": 20
+      },
+      "key_tips": [
+        "Toujours escorter les transports de troupes avec des light ships",
+        "Horsemen + slingers = nuke terrestre classique",
+        "Scouter avant d'attaquer (utiliser un pegasus ou une petite force test)",
+        "Coordination d'alliance: attaques simultanées pour dépasser la défense",
+        "Le slinger a le meilleur AA/F (23) — priorité en production"
+      ]
+    },
+    "defense_city": {
+      "name": "Ville Défensive",
+      "applicable_worlds": [
+        "speed1_revolt",
+        "speed2_revolt",
+        "speed3_revolt",
+        "speed3_conquest"
+      ],
+      "city_specialization": "defense",
+      "description": "Ville fortifiée pour défendre les alliés. Mur 25 obligatoire.",
+      "build_order": [
+        {
+          "building": "senate",
+          "target_level": 10,
+          "priority": 1
+        },
+        {
+          "building": "wall",
+          "target_level": 25,
+          "priority": 2,
+          "reason": "+150% défense — priorité absolue"
+        },
+        {
+          "building": "farm",
+          "target_level": 35,
+          "priority": 3,
+          "reason": "Masse de troupes défensives"
+        },
+        {
+          "building": "barracks",
+          "target_level": 25,
+          "priority": 4
+        },
+        {
+          "building": "harbor",
+          "target_level": 20,
+          "priority": 5,
+          "reason": "Biremes pour défense navale"
+        },
+        {
+          "building": "warehouse",
+          "target_level": 25,
+          "priority": 6
+        }
+      ],
+      "troop_targets": {
+        "sword": 400,
+        "hoplite": 300,
+        "slinger": 300,
+        "bireme": 80
+      },
+      "key_tips": [
+        "Mur 25 obligatoire avant de recruter des troupes en masse",
+        "Mix sword + hoplite + slinger couvre tous les types d'attaque",
+        "Biremes en masse pour contrer les attaques navales",
+        "Envoyer des renforts vers les alliés attaqués rapidement",
+        "Sword: meilleure défense distance (30) — contre slingers adverses",
+        "Archer: meilleure défense sharp (25) — contre hoplites adverses"
+      ]
+    },
+    "commerce_city": {
+      "name": "Ville Commerce",
+      "applicable_worlds": [
+        "speed1_revolt",
+        "speed2_revolt",
+        "speed3_revolt"
+      ],
+      "city_specialization": "commerce",
+      "description": "Ville optimisée pour le commerce et l'approvisionnement de l'alliance.",
+      "build_order": [
+        {
+          "building": "senate",
+          "target_level": 10,
+          "priority": 1
+        },
+        {
+          "building": "market",
+          "target_level": 30,
+          "priority": 2,
+          "reason": "Capacité de trade maximale"
+        },
+        {
+          "building": "warehouse",
+          "target_level": 30,
+          "priority": 3,
+          "reason": "Stocker le maximum de ressources"
+        },
+        {
+          "building": "farm",
+          "target_level": 30,
+          "priority": 4
+        },
+        {
+          "building": "harbor",
+          "target_level": 15,
+          "priority": 5,
+          "reason": "Trade avec îles voisines"
+        }
+      ],
+      "troop_targets": {
+        "bireme": 40,
+        "slinger": 150
+      },
+      "key_tips": [
+        "Farmer les villages intensément pour maximiser les ressources",
+        "Coordonner les envois avec l'alliance (grands projets: WW, CS allié)",
+        "Protéger la ville avec une défense minimale"
+      ]
+    },
+    "ww_support_city": {
+      "name": "Support Merveilles du Monde",
+      "applicable_worlds": [
+        "speed1_revolt",
+        "speed2_revolt"
+      ],
+      "city_specialization": "ww_support",
+      "description": "Ville dédiée à alimenter les Merveilles du Monde en fin de partie.",
+      "build_order": [
+        {
+          "building": "senate",
+          "target_level": 15,
+          "priority": 1
+        },
+        {
+          "building": "market",
+          "target_level": 30,
+          "priority": 2
+        },
+        {
+          "building": "warehouse",
+          "target_level": 30,
+          "priority": 3
+        },
+        {
+          "building": "farm",
+          "target_level": 40,
+          "priority": 4
+        }
+      ],
+      "troop_targets": {
+        "bireme": 80,
+        "slinger": 200
+      },
+      "key_tips": [
+        "Maximiser la capacité de stockage et de trade",
+        "Organiser des convois permanents vers la WW",
+        "Protéger les convois avec escorte de biremes"
+      ]
+    }
+  },
+  "city_specializations": {
+    "colony_rush": {
+      "label": "Colony Rush",
+      "description": "Première ville orientée colonisation rapide. L'objectif est Harbor 20 + Academy 13 + Colony Ship le plus vite possible.",
+      "icon": "🏛️",
+      "key_buildings": [
+        "harbor_20",
+        "academy_13",
+        "warehouse_20"
+      ],
+      "key_troops": [
+        "slinger",
+        "bireme",
+        "colony_ship"
+      ],
+      "suitable_for_city_number": [
+        1
+      ],
+      "priority_metric": "time_to_colony_ship"
+    },
+    "offense": {
+      "label": "Ville Offensive",
+      "description": "Ville dédiée aux attaques. Maximalise les troupes offensives et leur cadence de production.",
+      "icon": "⚔️",
+      "key_buildings": [
+        "barracks_25",
+        "stable_10",
+        "harbor_25",
+        "farm_35"
+      ],
+      "key_troops": [
+        "slinger",
+        "horseman",
+        "attack_ship"
+      ],
+      "suitable_for_city_number": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "priority_metric": "attack_power_per_pop"
+    },
+    "defense": {
+      "label": "Ville Défensive",
+      "description": "Ville fortifiée pour défendre les alliés. Mur 25 et troupes mixtes.",
+      "icon": "🛡️",
+      "key_buildings": [
+        "wall_25",
+        "barracks_25",
+        "harbor_20",
+        "farm_35"
+      ],
+      "key_troops": [
+        "sword",
+        "hoplite",
+        "slinger",
+        "bireme"
+      ],
+      "suitable_for_city_number": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "priority_metric": "defense_power_per_pop"
+    },
+    "commerce": {
+      "label": "Ville Commerce",
+      "description": "Optimisée pour le trade. Maximise les ressources disponibles pour l'alliance.",
+      "icon": "💰",
+      "key_buildings": [
+        "market_30",
+        "warehouse_30",
+        "farm_30"
+      ],
+      "key_troops": [
+        "bireme",
+        "slinger"
+      ],
+      "suitable_for_city_number": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "priority_metric": "trade_capacity_per_hour"
+    },
+    "cave": {
+      "label": "Ville Cave",
+      "description": "Ville avec cave maximale pour protéger l'argent stratégique contre les pillages.",
+      "icon": "🗝️",
+      "key_buildings": [
+        "cave_10",
+        "senate_10",
+        "warehouse_25"
+      ],
+      "key_troops": [
+        "slinger",
+        "bireme"
+      ],
+      "suitable_for_city_number": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "priority_metric": "silver_protected"
+    },
+    "ww_support": {
+      "label": "Support Merveilles",
+      "description": "Ville dédiée à l'alimentation des Merveilles du Monde en fin de partie.",
+      "icon": "🏛️",
+      "key_buildings": [
+        "market_30",
+        "warehouse_30",
+        "farm_40"
+      ],
+      "key_troops": [
+        "bireme"
+      ],
+      "suitable_for_city_number": [
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "priority_metric": "resource_flow_per_hour"
+    }
+  }
+}

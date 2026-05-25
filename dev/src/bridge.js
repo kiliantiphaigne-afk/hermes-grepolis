@@ -1,0 +1,774 @@
+/**
+ * bridge.js — GameBridge : l'interface entre Hermes et Grepolis
+ *
+ * PIÈCE CRITIQUE — lire attentivement avant de modifier.
+ *
+ * Ce module est la seule couche qui parle directement aux internals de Grepolis.
+ * Tout le reste d'Hermes passe par ce bridge.
+ *
+ * Principes fondamentaux :
+ * 1. Ne JAMAIS faire de requêtes AJAX directes. Passer par les méthodes natives.
+ * 2. Toujours wrapper dans try/catch — les internals changent sans préavis.
+ * 3. Si un objet n'existe pas : log warn + retourner null/[] + continuer.
+ * 4. Les actions repassent exactement par les mêmes chemins que l'UI native.
+ *
+ * Architecture Grepolis (Backbone.js) :
+ * - window.Game       : namespace principal, hydraté au chargement
+ * - window.MM         : Module Manager, contient les collections Backbone
+ * - MM.models         : Collections (town_list, island_towns, player_data…)
+ * - MM.models.town_list.models : Array de Backbone.Model représentant les villes
+ * - Chaque modèle Backbone expose .get('attribute'), .toJSON(), .collection
+ * - Les actions passent par des vues Backbone (BuildingPlaceView, etc.) ou
+ *   directement via des GameDataHelperFunctions
+ */
+
+import { hermes } from './core.js';
+
+// ─── Utilitaires internes ─────────────────────────────────────────────────────
+
+/**
+ * Tente d'accéder à un chemin profond dans un objet sans lever d'exception.
+ * Exemple : safeGet(window, 'MM.models.town_list.models')
+ *
+ * @param {object} root - Objet racine
+ * @param {string} path - Chemin pointé (ex: 'MM.models.town_list')
+ * @returns {*} Valeur ou undefined si le chemin n'existe pas
+ */
+function safeGet(root, path) {
+  try {
+    return path.split('.').reduce((obj, key) => (obj != null ? obj[key] : undefined), root);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Appelle une méthode sur un objet de manière sécurisée.
+ * @param {object} obj
+ * @param {string} method
+ * @param {...*} args
+ * @returns {*} Résultat ou undefined si l'appel échoue
+ */
+function safeCall(obj, method, ...args) {
+  try {
+    if (obj && typeof obj[method] === 'function') {
+      return obj[method](...args);
+    }
+  } catch (err) {
+    hermes.log.warn(`safeCall failed: ${method}`, err);
+  }
+  return undefined;
+}
+
+/**
+ * Calcule les millisecondes restantes avant un timestamp Unix (secondes).
+ * @param {number} unixTimestamp - Timestamp en secondes
+ * @returns {number} Millisecondes restantes (0 si passé)
+ */
+function msUntil(unixTimestamp) {
+  return Math.max(0, unixTimestamp * 1000 - Date.now());
+}
+
+// ─── Résolution des objets Backbone ──────────────────────────────────────────
+
+/**
+ * Répertoire des chemins connus vers les objets Grepolis.
+ * Ces chemins varient selon la version du jeu — on essaie plusieurs alternatives.
+ *
+ * Structure mise à jour lors de la détection (voir probe()).
+ */
+const PATHS = {
+  // Collections de villes du joueur
+  townList: [
+    'MM.models.town_list',
+    'Game.models.town_list',
+    'GameModels.town_list',
+  ],
+  // Données de village fermier (farm villages sur les îles)
+  farmVillages: [
+    'MM.models.farm_towns',
+    'Game.models.farm_towns',
+  ],
+  // Données du monde (vitesse, système, etc.)
+  worldSettings: [
+    'Game.world_config',
+    'MM.models.game_data',
+    'GameConfig',
+  ],
+  // Attaques entrantes
+  attacks: [
+    'MM.models.town_overviews',
+    'MM.models.unit_movements',
+  ],
+  // Relations joueur (alliance, guerres, NAP)
+  relations: [
+    'MM.models.player_relations',
+    'MM.models.alliance_relations',
+  ],
+};
+
+/**
+ * Résout le premier chemin valide dans une liste de chemins alternatifs.
+ * @param {string[]} paths - Chemins à essayer dans l'ordre
+ * @returns {*} Premier objet trouvé, ou null
+ */
+function resolveFirst(paths) {
+  for (const path of paths) {
+    const obj = safeGet(window, path);
+    if (obj !== undefined && obj !== null) return obj;
+  }
+  return null;
+}
+
+// ─── Parsers de modèles Backbone ─────────────────────────────────────────────
+
+/**
+ * Convertit un modèle Backbone de ville en objet City Hermes.
+ * @param {object} model - Backbone.Model
+ * @returns {import('./types').City|null}
+ */
+function parseTownModel(model) {
+  if (!model) return null;
+  try {
+    // Backbone.Model expose get() pour accéder aux attributs.
+    const id   = model.get('id')   ?? model.id;
+    const name = model.get('name') ?? model.get('town_name') ?? `Ville ${id}`;
+    const x    = model.get('x')    ?? model.get('coord_x');
+    const y    = model.get('y')    ?? model.get('coord_y');
+
+    // Ressources — peuvent être dans un sous-objet ou à plat.
+    const resources = parseResources(model);
+
+    // Bâtiments — map { nom: niveau }.
+    const buildings = parseBuildings(model);
+
+    // File de construction.
+    const queue = parseBuildQueue(model);
+
+    // Population.
+    const population = {
+      current: model.get('pop')     ?? model.get('population')     ?? 0,
+      max:     model.get('pop_max') ?? model.get('population_max') ?? 0,
+    };
+
+    // Spécialisation de ville (certains mondes).
+    const specialization = model.get('town_type') ?? model.get('spec') ?? null;
+
+    return { id, name, x, y, resources, buildings, queue, population, specialization };
+  } catch (err) {
+    hermes.log.warn('parseTownModel error', err);
+    return null;
+  }
+}
+
+/**
+ * Extrait les ressources d'un modèle de ville.
+ * Grepolis stocke parfois les ressources dans un sous-modèle ou à plat.
+ * @param {object} model
+ * @returns {{ wood: number, stone: number, silver: number }}
+ */
+function parseResources(model) {
+  // Tentative 1 : attribut 'resources' (objet ou Backbone.Model).
+  const resObj = model.get('resources');
+  if (resObj && typeof resObj === 'object') {
+    const get = typeof resObj.get === 'function'
+      ? (k) => resObj.get(k)
+      : (k) => resObj[k];
+    return {
+      wood:   parseInt(get('wood') ?? 0, 10),
+      stone:  parseInt(get('stone') ?? 0, 10),
+      silver: parseInt(get('silver') ?? get('favor') ?? 0, 10),
+    };
+  }
+  // Tentative 2 : attributs directs sur le modèle de ville.
+  return {
+    wood:   parseInt(model.get('wood')   ?? 0, 10),
+    stone:  parseInt(model.get('stone')  ?? 0, 10),
+    silver: parseInt(model.get('silver') ?? model.get('favor') ?? 0, 10),
+  };
+}
+
+/**
+ * Extrait la map des bâtiments (nom → niveau) d'un modèle de ville.
+ * @param {object} model
+ * @returns {Object.<string, number>}
+ */
+function parseBuildings(model) {
+  const buildings = {};
+  // Tentative 1 : attribut 'buildings' (objet).
+  const raw = model.get('buildings');
+  if (raw && typeof raw === 'object') {
+    const src = typeof raw.toJSON === 'function' ? raw.toJSON() : raw;
+    for (const [name, level] of Object.entries(src)) {
+      buildings[name] = parseInt(level, 10) || 0;
+    }
+    return buildings;
+  }
+  // Tentative 2 : clés directes sur le modèle avec pattern 'building_*'.
+  // Grepolis utilise parfois 'farm', 'storage', 'main' comme clés directes.
+  const knownBuildings = [
+    'main', 'farm', 'storage', 'place', 'lumber', 'stoner', 'ironer',
+    'market', 'docks', 'barracks', 'temple', 'wall', 'hide', 'theater',
+    'thermal', 'library', 'lighthouse', 'tower', 'statue', 'oracle',
+  ];
+  for (const name of knownBuildings) {
+    const level = model.get(name) ?? model.get(`building_${name}`);
+    if (level !== undefined) buildings[name] = parseInt(level, 10) || 0;
+  }
+  return buildings;
+}
+
+/**
+ * Extrait la file de construction d'une ville.
+ * @param {object} model
+ * @returns {Array<{building: string, level: number, completesAt: number}>}
+ */
+function parseBuildQueue(model) {
+  const queue = [];
+  const raw = model.get('building_queue') ?? model.get('build_queue') ?? [];
+  const items = Array.isArray(raw) ? raw
+    : (typeof raw.models !== 'undefined' ? raw.models : []);
+
+  for (const item of items) {
+    const data = typeof item.get === 'function' ? item.toJSON() : item;
+    queue.push({
+      building:    data.building ?? data.type ?? 'unknown',
+      level:       parseInt(data.level ?? data.to ?? 0, 10),
+      completesAt: parseInt(data.end_at ?? data.complete_at ?? 0, 10),
+    });
+  }
+  return queue;
+}
+
+/**
+ * Convertit un modèle de village fermier en objet FarmVillage Hermes.
+ * @param {object} model - Backbone.Model
+ * @returns {import('./types').FarmVillage|null}
+ */
+function parseFarmVillageModel(model) {
+  if (!model) return null;
+  try {
+    const id       = model.get('id') ?? model.id;
+    const name     = model.get('name') ?? `Village ${id}`;
+    const mood     = parseInt(model.get('mood') ?? 100, 10);
+    // Timestamps en secondes Unix.
+    const lastDemandTs  = model.get('last_demand_sent_at') ?? 0;
+    const lastLootTs    = model.get('last_loot_sent_at')   ?? 0;
+    // Cooldown restant (en ms pour faciliter l'usage dans HumanEngine).
+    const cooldownTs    = model.get('next_action_at') ?? model.get('cooldown_end') ?? 0;
+
+    const resources = {
+      wood:   parseInt(model.get('wood')  ?? 0, 10),
+      stone:  parseInt(model.get('stone') ?? 0, 10),
+      silver: parseInt(model.get('iron')  ?? model.get('silver') ?? 0, 10),
+    };
+
+    return {
+      id,
+      name,
+      mood,
+      lastDemand:         lastDemandTs,
+      lastLoot:           lastLootTs,
+      resources,
+      cooldownRemaining:  msUntil(cooldownTs),
+    };
+  } catch (err) {
+    hermes.log.warn('parseFarmVillageModel error', err);
+    return null;
+  }
+}
+
+// ─── Event Hooks Backbone ─────────────────────────────────────────────────────
+
+/**
+ * Active les hooks sur les collections Backbone pour remonter les events Grepolis
+ * sous forme d'events Hermes normalisés.
+ *
+ * Backbone émet des events 'change', 'add', 'remove' sur ses collections.
+ * On écoute ces events et on les traduit pour les modules Hermes.
+ */
+function attachBackboneHooks() {
+  const townList = resolveFirst(PATHS.townList);
+
+  if (townList && typeof townList.on === 'function') {
+    // Ressources changées (farming, production, commerce).
+    townList.on('change:resources change:wood change:stone change:silver', (model) => {
+      hermes.emit('city:resources:changed', {
+        cityId: model.get('id') ?? model.id,
+        resources: parseResources(model),
+      });
+    });
+
+    // File de construction mise à jour.
+    townList.on('change:building_queue change:build_queue', (model) => {
+      hermes.emit('construction:complete', {
+        cityId:   model.get('id') ?? model.id,
+        buildings: parseBuildings(model),
+      });
+    });
+
+    hermes.log.debug('Hooks Backbone town_list actifs');
+  } else {
+    hermes.log.warn(`Impossible d'hooker town_list — collection non trouvée`);
+  }
+
+  // Hook sur les mouvements de troupes (attaques entrantes).
+  const movements = resolveFirst(PATHS.attacks);
+  if (movements && typeof movements.on === 'function') {
+    movements.on('add', (model) => {
+      const isIncoming = model.get('enemy') ?? model.get('is_attack') ?? false;
+      if (isIncoming) {
+        hermes.emit('attack:incoming', parseAttackModel(model));
+      }
+    });
+    hermes.log.debug('Hooks Backbone unit_movements actifs');
+  } else {
+    hermes.log.warn(`Impossible d'hooker unit_movements — collection non trouvée`);
+  }
+}
+
+/**
+ * Parse un modèle d'attaque Backbone.
+ * @param {object} model
+ * @returns {import('./types').Attack}
+ */
+function parseAttackModel(model) {
+  return {
+    id:           model.get('id') ?? model.id,
+    fromCityId:   model.get('town_id_origin') ?? model.get('from_id'),
+    toCityId:     model.get('town_id_target') ?? model.get('to_id'),
+    arrivalTime:  model.get('arrival_time') ?? 0,
+    units:        model.get('units') ?? {},
+    isIncoming:   true,
+  };
+}
+
+// ─── API publique du bridge ───────────────────────────────────────────────────
+
+/**
+ * GameBridge — interface entre Hermes et les internals Grepolis.
+ * @type {import('./types').Bridge}
+ */
+const bridge = {
+
+  // ── Data readers ──────────────────────────────────────────────────────────
+
+  /**
+   * Retourne toutes les villes du joueur avec leurs données courantes.
+   * @returns {import('./types').City[]}
+   */
+  getCities() {
+    try {
+      const townList = resolveFirst(PATHS.townList);
+      if (!townList) {
+        hermes.log.warn('getCities: town_list non trouvé');
+        return [];
+      }
+      // Backbone.Collection.models ou simple Array.
+      const models = townList.models ?? Object.values(townList);
+      return models
+        .map(parseTownModel)
+        .filter(Boolean);
+    } catch (err) {
+      hermes.log.error('getCities failed', err);
+      return [];
+    }
+  },
+
+  /**
+   * Retourne une ville par son ID.
+   * @param {string|number} cityId
+   * @returns {import('./types').City|null}
+   */
+  getCity(cityId) {
+    try {
+      const townList = resolveFirst(PATHS.townList);
+      if (!townList) return null;
+      // Backbone.Collection.get() recherche par ID.
+      const model = typeof townList.get === 'function'
+        ? townList.get(cityId)
+        : (townList.models ?? []).find((m) => m.get('id') === cityId || m.id === cityId);
+      return parseTownModel(model);
+    } catch (err) {
+      hermes.log.error(`getCity(${cityId}) failed`, err);
+      return null;
+    }
+  },
+
+  /**
+   * Retourne les villages fermiers associés à une ville.
+   * Les farm villages sont liés à l'île sur laquelle se trouve la ville.
+   *
+   * @param {string|number} cityId
+   * @returns {import('./types').FarmVillage[]}
+   */
+  getFarmingVillages(cityId) {
+    try {
+      const farmList = resolveFirst(PATHS.farmVillages);
+      if (!farmList) {
+        hermes.log.warn('getFarmingVillages: farm_towns non trouvé');
+        return [];
+      }
+      const models = farmList.models ?? Object.values(farmList);
+
+      // Filtrer les villages liés à la ville (par town_id ou island).
+      const city = this.getCity(cityId);
+      const filtered = city
+        ? models.filter((m) => {
+            const linkedId = m.get('linked_town_id') ?? m.get('town_id');
+            return linkedId == cityId; // == intentionnel (int vs string)
+          })
+        : models;
+
+      return filtered
+        .map(parseFarmVillageModel)
+        .filter(Boolean);
+    } catch (err) {
+      hermes.log.error(`getFarmingVillages(${cityId}) failed`, err);
+      return [];
+    }
+  },
+
+  /**
+   * Retourne les paramètres du monde (vitesse, système, etc.).
+   * @returns {import('./types').WorldProfile|null}
+   */
+  getWorldSettings() {
+    try {
+      const config = resolveFirst(PATHS.worldSettings);
+      if (!config) {
+        hermes.log.warn('getWorldSettings: world_config non trouvé');
+        return null;
+      }
+      const get = typeof config.get === 'function' ? (k) => config.get(k) : (k) => config[k];
+
+      return {
+        speed:           parseFloat(get('speed') ?? get('world_speed') ?? 1),
+        system:          get('unit_system') ?? get('system') ?? 'normal',
+        ww:              Boolean(get('ww') ?? get('world_wonder') ?? false),
+        morale:          Boolean(get('morale') ?? true),
+        unitSpeedMult:   parseFloat(get('unit_speed') ?? 1),
+        maxAllianceSize: parseInt(get('alliance_limit') ?? get('max_alliance_size') ?? 100, 10),
+      };
+    } catch (err) {
+      hermes.log.error('getWorldSettings failed', err);
+      return null;
+    }
+  },
+
+  /**
+   * Retourne les cellules de carte autour d'une position.
+   * Utile pour l'analyse tactique (identifier les cibles, les alliés proches).
+   *
+   * NOTE : L'accès à la carte complète est limité dans Grepolis —
+   * seule la zone chargée est disponible. On interroge MM.models.map_data.
+   *
+   * @param {number} x - Coordonnée X du centre
+   * @param {number} y - Coordonnée Y du centre
+   * @param {number} radius - Rayon de recherche
+   * @returns {import('./types').MapCell[]}
+   */
+  getMapData(x, y, radius) {
+    try {
+      const mapData = safeGet(window, 'MM.models.map_data')
+        ?? safeGet(window, 'Game.map_data');
+      if (!mapData) return [];
+
+      const models = mapData.models ?? Object.values(mapData);
+      const results = [];
+
+      for (const model of models) {
+        const cx = model.get('x') ?? model.get('coord_x');
+        const cy = model.get('y') ?? model.get('coord_y');
+        if (cx === undefined || cy === undefined) continue;
+        // Filtre par rayon (distance de Chebyshev pour les grilles hex-like).
+        if (Math.abs(cx - x) > radius || Math.abs(cy - y) > radius) continue;
+
+        results.push({
+          x:           cx,
+          y:           cy,
+          playerId:    model.get('player_id') ?? model.get('pid'),
+          playerName:  model.get('player_name') ?? model.get('pname'),
+          allianceId:  model.get('alliance_id') ?? model.get('aid'),
+          allianceName:model.get('alliance_name') ?? model.get('aname'),
+          cityPoints:  parseInt(model.get('points') ?? 0, 10),
+        });
+      }
+      return results;
+    } catch (err) {
+      hermes.log.error('getMapData failed', err);
+      return [];
+    }
+  },
+
+  /**
+   * Retourne les relations du joueur (alliance, guerre, NAP, neutralité).
+   * @returns {import('./types').Relation[]}
+   */
+  getPlayerRelations() {
+    try {
+      const relations = resolveFirst(PATHS.relations);
+      if (!relations) return [];
+
+      const models = relations.models ?? Object.values(relations);
+      return models.map((model) => ({
+        playerId:    model.get('player_id') ?? model.id,
+        playerName:  model.get('player_name') ?? '',
+        allianceId:  model.get('alliance_id'),
+        type:        model.get('relation_type') ?? model.get('type') ?? 'neutral',
+      })).filter((r) => r.playerId !== undefined);
+    } catch (err) {
+      hermes.log.error('getPlayerRelations failed', err);
+      return [];
+    }
+  },
+
+  /**
+   * Retourne les attaques entrantes en cours.
+   * @returns {import('./types').Attack[]}
+   */
+  getIncomingAttacks() {
+    try {
+      const movements = resolveFirst(PATHS.attacks);
+      if (!movements) return [];
+
+      const models = movements.models ?? Object.values(movements);
+      return models
+        .filter((m) => {
+          const isEnemy = m.get('enemy') ?? m.get('is_attack');
+          return Boolean(isEnemy);
+        })
+        .map(parseAttackModel);
+    } catch (err) {
+      hermes.log.error('getIncomingAttacks failed', err);
+      return [];
+    }
+  },
+
+  // ── Action executors ──────────────────────────────────────────────────────
+
+  /**
+   * Lance une action de farming sur un village fermier.
+   * Reproduit exactement ce que fait le code natif de Grepolis quand le joueur
+   * clique sur "Réclamer" ou "Piller".
+   *
+   * Le jeu appelle en interne une vue Backbone qui trigge la requête serveur.
+   * On reproduit ce comportement en appelant le même handler.
+   *
+   * @param {string|number} cityId      - ID de la ville depuis laquelle agir
+   * @param {string|number} villageId   - ID du village fermier
+   * @param {'demand'|'loot'|'trade'}  type - Type d'action
+   * @returns {Promise<boolean>} true si l'action a été envoyée
+   */
+  async farmVillage(cityId, villageId, type) {
+    try {
+      // Vérifier que le village existe et est prêt.
+      const villages = this.getFarmingVillages(cityId);
+      const village = villages.find((v) => v.id == villageId);
+      if (!village) {
+        hermes.log.warn(`farmVillage: village ${villageId} non trouvé dans ville ${cityId}`);
+        return false;
+      }
+      if (village.cooldownRemaining > 0) {
+        hermes.log.debug(`farmVillage: village ${villageId} en cooldown (${village.cooldownRemaining}ms)`);
+        return false;
+      }
+
+      // Chercher la vue ou le contrôleur natif responsable du farming.
+      // Grepolis expose souvent cela via window.GameDataHelperFunctions ou
+      // via la collection farm_towns elle-même.
+      const farmList = resolveFirst(PATHS.farmVillages);
+      const model = farmList && (typeof farmList.get === 'function'
+        ? farmList.get(villageId)
+        : (farmList.models ?? []).find((m) => m.id == villageId));
+
+      if (!model) {
+        hermes.log.warn(`farmVillage: modèle Backbone ${villageId} non trouvé`);
+        return false;
+      }
+
+      // Méthode 1 : le modèle lui-même expose une méthode d'action.
+      if (typeof model[type] === 'function') {
+        await new Promise((resolve) => model[type]({ town_id: cityId }, resolve));
+        hermes.log.info(`farmVillage: ${type} envoyé → village ${villageId}`);
+        return true;
+      }
+
+      // Méthode 2 : passer par une commande globale Grepolis.
+      const cmd = safeGet(window, 'GameDataHelperFunctions.farmTown')
+        ?? safeGet(window, 'GPWindowMgr.farmAction');
+      if (typeof cmd === 'function') {
+        cmd({ town_id: cityId, farm_town_id: villageId, action: type });
+        hermes.log.info(`farmVillage: ${type} via GPWindowMgr → village ${villageId}`);
+        return true;
+      }
+
+      hermes.log.warn(`farmVillage: aucun mécanisme d'action trouvé pour ${type}`);
+      return false;
+    } catch (err) {
+      hermes.log.error(`farmVillage(${cityId}, ${villageId}, ${type}) failed`, err);
+      return false;
+    }
+  },
+
+  /**
+   * Lance une construction dans une ville.
+   * Reproduit l'action "Construire" depuis la vue BuildingPlace.
+   *
+   * @param {string|number} cityId    - ID de la ville
+   * @param {string}        building  - Nom du bâtiment (ex: 'storage', 'farm')
+   * @param {number}        level     - Niveau cible (niveau actuel + 1 généralement)
+   * @returns {Promise<boolean>}
+   */
+  async buildBuilding(cityId, building, level) {
+    try {
+      // Méthode 1 : via BuildingPlaceView (vue native).
+      const BuildingPlace = safeGet(window, 'Views.BuildingPlaceView')
+        ?? safeGet(window, 'GPWindowMgr.BuildingPlaceView');
+      if (BuildingPlace && typeof BuildingPlace.build === 'function') {
+        BuildingPlace.build({ town_id: cityId, building, level });
+        hermes.log.info(`buildBuilding: ${building} lvl${level} → ville ${cityId}`);
+        return true;
+      }
+
+      // Méthode 2 : via le modèle de ville Backbone.
+      const townList = resolveFirst(PATHS.townList);
+      const model = townList && (typeof townList.get === 'function'
+        ? townList.get(cityId)
+        : null);
+      if (model && typeof model.buildBuilding === 'function') {
+        model.buildBuilding(building, level);
+        hermes.log.info(`buildBuilding: ${building} lvl${level} via model`);
+        return true;
+      }
+
+      hermes.log.warn(`buildBuilding: aucun mécanisme trouvé pour construire ${building}`);
+      return false;
+    } catch (err) {
+      hermes.log.error(`buildBuilding(${cityId}, ${building}, ${level}) failed`, err);
+      return false;
+    }
+  },
+
+  /**
+   * Envoie des ressources d'une ville à une autre.
+   * Utilise le système de commerce interne du jeu.
+   *
+   * @param {string|number} fromCityId
+   * @param {string|number} toCityId
+   * @param {{ wood: number, stone: number, silver: number }} resources
+   * @returns {Promise<boolean>}
+   */
+  async sendTrade(fromCityId, toCityId, resources) {
+    try {
+      const TradeView = safeGet(window, 'Views.TradeCenterView')
+        ?? safeGet(window, 'GPWindowMgr.TradeCenterView');
+      if (TradeView && typeof TradeView.send === 'function') {
+        TradeView.send({
+          town_id_origin: fromCityId,
+          town_id_target: toCityId,
+          resources,
+        });
+        hermes.log.info(`sendTrade: ${JSON.stringify(resources)} → ville ${toCityId}`);
+        return true;
+      }
+
+      // Fallback via commande globale.
+      const tradeCmd = safeGet(window, 'GameDataHelperFunctions.sendTrade');
+      if (typeof tradeCmd === 'function') {
+        tradeCmd(fromCityId, toCityId, resources);
+        return true;
+      }
+
+      hermes.log.warn('sendTrade: aucun mécanisme de commerce trouvé');
+      return false;
+    } catch (err) {
+      hermes.log.error('sendTrade failed', err);
+      return false;
+    }
+  },
+
+  /**
+   * Envoie du soutien (troupes) vers une position.
+   *
+   * @param {string|number}  fromCityId   - Ville d'origine
+   * @param {number}         targetX      - Coordonnée X cible
+   * @param {number}         targetY      - Coordonnée Y cible
+   * @param {Object.<string, number>} units - Unités { archer: 5, sword: 10 }
+   * @param {number}         [arrivalTime] - Timestamp Unix d'arrivée souhaité (optionnel)
+   * @returns {Promise<boolean>}
+   */
+  async sendSupport(fromCityId, targetX, targetY, units, arrivalTime) {
+    try {
+      const SupportView = safeGet(window, 'Views.AttackView')
+        ?? safeGet(window, 'GPWindowMgr.AttackView');
+      if (SupportView && typeof SupportView.sendSupport === 'function') {
+        SupportView.sendSupport({
+          town_id: fromCityId,
+          target_x: targetX,
+          target_y: targetY,
+          units,
+          arrival_time: arrivalTime,
+          attack_type: 'support',
+        });
+        hermes.log.info(`sendSupport: ${JSON.stringify(units)} → (${targetX},${targetY})`);
+        return true;
+      }
+
+      hermes.log.warn('sendSupport: aucun mécanisme de support trouvé');
+      return false;
+    } catch (err) {
+      hermes.log.error('sendSupport failed', err);
+      return false;
+    }
+  },
+
+  // ── Event hooks ───────────────────────────────────────────────────────────
+
+  /**
+   * Souscrit à un event de jeu normalisé.
+   * Events disponibles :
+   * - 'city:resources:changed' : { cityId, resources }
+   * - 'attack:incoming'        : Attack
+   * - 'construction:complete'  : { cityId, buildings }
+   * - 'alliance:updated'       : données alliance
+   *
+   * @param {string}   eventType
+   * @param {Function} handler
+   * @returns {Function} Fonction de désinscription
+   */
+  onGameEvent(eventType, handler) {
+    return hermes.on(eventType, handler);
+  },
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Initialise le bridge : probe les objets Grepolis, attache les hooks.
+   * Appelé par core.js lors du bootstrap.
+   */
+  init() {
+    hermes.log.info('GameBridge: initialisation…');
+
+    // Exploration des internals disponibles (log pour le debug).
+    if (typeof window.Game !== 'undefined') {
+      const availableKeys = Object.keys(window.Game).slice(0, 20).join(', ');
+      hermes.log.debug(`window.Game disponible. Clés (20 premières): ${availableKeys}`);
+    }
+    if (typeof window.MM !== 'undefined') {
+      const availableModels = Object.keys(window.MM.models ?? {}).join(', ');
+      hermes.log.debug(`window.MM.models: ${availableModels}`);
+    }
+
+    // Attacher les hooks Backbone.
+    attachBackboneHooks();
+
+    // Enregistrer le bridge dans hermes pour que les modules puissent y accéder.
+    hermes.setBridge(bridge);
+
+    hermes.log.info('GameBridge: prêt');
+  },
+};
+
+export { bridge };
+export default bridge;
