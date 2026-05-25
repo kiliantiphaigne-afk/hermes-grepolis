@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hermes — Grepolis Assistant
 // @namespace    https://github.com/hermes-grepolis
-// @version      1.0.4
+// @version      1.0.5
 // @description  Intelligent automation for Grepolis — farming, building, combat, strategy advisor
 // @author       Hermes
 // @match        *://*.grepolis.com/game/*
@@ -845,7 +845,21 @@
   // ─── Scanner global — trouve les villes n'importe où dans window ─────────────
 
   /**
-   * Vérifie si un plain object ressemble à une ville Grepolis.
+   * Retourne le player_id du joueur courant depuis window.Game ou MM.
+   * @returns {number|string|null}
+   */
+  function getCurrentPlayerId() {
+    try {
+      return _uw.Game?.player_id
+        ?? _uw.Game?.id
+        ?? _uw.MM?.models?.player?.id
+        ?? _uw.MM?.models?.player_data?.models?.[0]?.get?.('id')
+        ?? null;
+    } catch { return null; }
+  }
+
+  /**
+   * Vérifie si un plain object ressemble à une ville Grepolis quelconque.
    * @param {*} o
    * @returns {boolean}
    */
@@ -855,6 +869,31 @@
     const hasName = 'name' in o && o.name && typeof o.name === 'string' && o.name.length > 0;
     const hasPos  = 'x' in o || 'y' in o || 'coord_x' in o || 'island_x' in o;
     return hasId && hasName && hasPos;
+  }
+
+  /**
+   * Vérifie si un plain object est une ville appartenant au joueur courant.
+   * Les villes propres ont des données de ressources / bâtiments / population.
+   * @param {*} o
+   * @param {number|string|null} playerId - ID du joueur courant
+   * @returns {boolean}
+   */
+  function looksLikeOwnTown(o, playerId) {
+    if (!looksLikeTown(o)) return false;
+
+    // Filtre par player_id si disponible
+    if (playerId != null) {
+      const townPlayerId = o.player_id ?? o.owner_id ?? o.user_id;
+      if (townPlayerId != null && String(townPlayerId) !== String(playerId)) return false;
+    }
+
+    // Les villes propres ont des ressources OU des données de population
+    const hasResources  = 'wood' in o || 'stone' in o || 'iron' in o || 'silver' in o
+                       || (o.resources && typeof o.resources === 'object');
+    const hasPopulation = 'pop' in o || 'population' in o || 'pop_max' in o;
+    const hasBuildings  = 'buildings' in o || 'main' in o || 'farm' in o || 'barracks' in o;
+
+    return hasResources || hasPopulation || hasBuildings;
   }
 
   /**
@@ -882,13 +921,14 @@
 
   /**
    * Scan récursif de l'arbre de propriétés d'un objet.
-   * Retourne tous les objets qui ressemblent à des collections de villes.
+   * Retourne uniquement les villes appartenant au joueur courant.
    * @param {*}      root
    * @param {number} maxDepth
    * @param {WeakSet} seen
+   * @param {number|string|null} playerId
    * @returns {object[]}
    */
-  function deepScanForTowns(root, maxDepth = 4, seen = new WeakSet()) {
+  function deepScanForTowns(root, maxDepth = 4, seen = new WeakSet(), playerId = null) {
     const found = [];
     if (!root || typeof root !== 'object') return found;
     try { if (seen.has(root)) return found; seen.add(root); } catch { return found; }
@@ -896,50 +936,49 @@
     // Cas 1 : collection Backbone (a .models array)
     if (Array.isArray(root.models) && root.models.length > 0) {
       const sample = extractRaw(root.models[0]);
-      if (sample && looksLikeTown(sample)) {
+      if (sample && looksLikeOwnTown(sample, playerId)) {
         for (const m of root.models) {
           const raw = extractRaw(m);
-          if (raw && looksLikeTown(raw)) found.push(raw);
+          if (raw && looksLikeOwnTown(raw, playerId)) found.push(raw);
         }
-        return found;
+        if (found.length > 0) return found;
       }
     }
 
     // Cas 2 : tableau direct
     if (Array.isArray(root) && root.length > 0) {
       const sample = extractRaw(root[0]);
-      if (sample && looksLikeTown(sample)) {
+      if (sample && looksLikeOwnTown(sample, playerId)) {
         for (const m of root) {
           const raw = extractRaw(m);
-          if (raw && looksLikeTown(raw)) found.push(raw);
+          if (raw && looksLikeOwnTown(raw, playerId)) found.push(raw);
         }
-        return found;
+        if (found.length > 0) return found;
       }
     }
 
-    // Cas 3 : map numérique { "12345": { name, x, y... } }
+    // Cas 3 : map { "12345": { name, x, y, wood... } } — uniquement villes propres
     const entries = Object.entries(root);
-    if (entries.length > 0 && entries.length < 500) {
-      let townLikeCount = 0;
+    if (entries.length > 0 && entries.length < 200) {
       const candidates = [];
       for (const [, val] of entries) {
-        if (looksLikeTown(val)) { townLikeCount++; candidates.push(val); }
+        if (looksLikeOwnTown(val, playerId)) candidates.push(val);
       }
-      if (townLikeCount > 0 && townLikeCount >= Math.min(entries.length, 1)) {
+      // Au moins 1 ville propre trouvée dans cette map
+      if (candidates.length > 0) {
         found.push(...candidates);
-        if (found.length > 0) return found;
+        return found;
       }
     }
 
     // Descente récursive
     if (maxDepth > 0) {
-      for (const [key, val] of Object.entries(root)) {
+      for (const [, val] of Object.entries(root)) {
         if (!val || typeof val !== 'object') continue;
         if (val instanceof Node || val instanceof Window) continue;
         try {
-          const sub = deepScanForTowns(val, maxDepth - 1, seen);
-          found.push(...sub);
-          if (found.length > 0) return found; // Stop dès qu'on trouve
+          const sub = deepScanForTowns(val, maxDepth - 1, seen, playerId);
+          if (sub.length > 0) return sub; // Stop dès qu'on trouve
         } catch { /* propriété inaccessible */ }
       }
     }
@@ -948,38 +987,44 @@
   }
 
   /**
-   * Scan exhaustif de window (+ unsafeWindow) pour trouver des villes.
-   * Dernière option si tous les chemins connus échouent.
+   * Scan exhaustif de window pour trouver LES VILLES DU JOUEUR uniquement.
+   * Filtre par player_id et par présence de données propres (ressources/bâtiments).
    * @returns {object[]}
    */
   function findTownsAnywhere() {
-    const result = [];
-    const seen   = new WeakSet();
+    const playerId = getCurrentPlayerId();
+    const seen     = new WeakSet();
 
     // 1. Namespaces Grepolis connus en priorité
-    for (const ns of ['MM', 'Game', 'GameData', 'GrepolisGame', 'isMobile', 'Backbone']) {
+    for (const ns of ['MM', 'Game', 'GameData', 'GrepolisGame', 'Backbone']) {
       try {
         const obj = _uw[ns];
         if (!obj) continue;
-        const towns = deepScanForTowns(obj, 4, seen);
-        if (towns.length > 0) return towns;
+        const towns = deepScanForTowns(obj, 4, seen, playerId);
+        if (towns.length > 0) {
+          hermes.log.info(`findTownsAnywhere: ${towns.length} villes trouvées dans window.${ns}`);
+          return towns;
+        }
       } catch { /* skip */ }
     }
 
-    // 2. Scan de TOUS les globals (lent mais exhaustif)
+    // 2. Scan de TOUS les globals (lent — dernier recours)
     try {
       for (const key of Object.keys(_uw)) {
-        if (/^(jQuery|_|\$|React|angular|google|webkit|chrome|FB|__)/i.test(key)) continue;
+        if (/^(jQuery|_|\$|React|angular|google|webkit|chrome|FB|__|document|window|console)/i.test(key)) continue;
         try {
           const val = _uw[key];
           if (!val || typeof val !== 'object') continue;
-          const towns = deepScanForTowns(val, 3, seen);
-          if (towns.length > 0) return towns;
+          const towns = deepScanForTowns(val, 3, seen, playerId);
+          if (towns.length > 0) {
+            hermes.log.info(`findTownsAnywhere: ${towns.length} villes trouvées dans window.${key}`);
+            return towns;
+          }
         } catch { /* skip */ }
       }
     } catch { /* skip */ }
 
-    return result;
+    return [];
   }
 
   /**
@@ -1205,45 +1250,47 @@
      */
     getCities() {
       try {
-        // ── 1. Backbone collection via chemins connus ────────────────────────
+        const playerId = getCurrentPlayerId();
+
+        // ── 1. Backbone town_list — source canonique (propres villes uniquement) ──
         const townList = resolveFirst(PATHS.townList);
         if (townList) {
           const models = townList.models ?? (Array.isArray(townList) ? townList : []);
           if (models.length > 0) {
-            // Essayer Backbone models d'abord, puis plain data
             let cities = models.map(parseTownModel).filter(Boolean);
             if (cities.length === 0) cities = models.map(parsePlainTownData).filter(Boolean);
             if (cities.length > 0) return cities;
           }
-          // townList sans .models → essayer comme map plain
           if (!Array.isArray(townList) && !townList.models) {
-            const vals = Object.values(townList).filter((v) => v && typeof v === 'object');
-            const cities = vals.map(parsePlainTownData).filter(Boolean);
+            const cities = Object.values(townList)
+              .filter((v) => v && typeof v === 'object')
+              .map(parsePlainTownData).filter(Boolean);
             if (cities.length > 0) return cities;
           }
         }
 
-        // ── 2. Game.village_data / player.towns (plain objects) ─────────────
+        // ── 2. Chemins plain object — filtrer par player_id ───────────────────
         for (const path of ['Game.village_data','Game.player.towns','Game.player_data.towns']) {
           const data = safeGet(_uw, path);
           if (data && typeof data === 'object') {
             const entries = Array.isArray(data) ? data : Object.values(data);
-            const cities  = entries.map(parsePlainTownData).filter(Boolean);
+            const cities  = entries
+              .filter((e) => !playerId || !e?.player_id || String(e.player_id) === String(playerId))
+              .map(parsePlainTownData).filter(Boolean);
             if (cities.length > 0) return cities;
           }
         }
 
-        // ── 3. Cache XHR ──────────────────────────────────────────────────────
+        // ── 3. Cache XHR — filtrer par player_id ─────────────────────────────
         if (_townCache.size > 0) {
-          const cities = Array.from(_townCache.values()).map(parsePlainTownData).filter(Boolean);
-          if (cities.length > 0) {
-            hermes.log.debug(`getCities: ${cities.length} villes via XHR cache`);
-            return cities;
-          }
+          const cities = Array.from(_townCache.values())
+            .filter((e) => !playerId || !e?.player_id || String(e.player_id) === String(playerId))
+            .map(parsePlainTownData).filter(Boolean);
+          if (cities.length > 0) return cities;
         }
 
-        // ── 4. Scan exhaustif de window — dernière chance ─────────────────────
-        const scanned = findTownsAnywhere();
+        // ── 4. Scan global — cherche les villes avec données propres ──────────
+        const scanned = findTownsAnywhere(); // déjà filtré par player_id + own data
         if (scanned.length > 0) {
           const cities = scanned.map(parsePlainTownData).filter(Boolean);
           if (cities.length > 0) {
@@ -1252,7 +1299,7 @@
           }
         }
 
-        // ── 5. Fallback DOM : au moins récupérer la ville courante ────────────
+        // ── 5. Fallback DOM ───────────────────────────────────────────────────
         const domTownId = getTownIdFromDOM();
         if (domTownId) {
           hermes.log.warn(`getCities: fallback DOM townId=${domTownId}`);
@@ -1262,7 +1309,7 @@
                     specialization: null }];
         }
 
-        hermes.log.warn('getCities: aucune ville trouvée — le jeu est-il complètement chargé ?');
+        hermes.log.warn('getCities: aucune ville trouvée');
         return [];
       } catch (err) {
         hermes.log.error('getCities failed', err);
